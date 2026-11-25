@@ -1,0 +1,13 @@
+{
+  "name": "pokemonchampions",
+  "version": "1.0.1",
+  "private": true,
+  "description": "Static file server for the Pokémon Champions 2D prototype",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
