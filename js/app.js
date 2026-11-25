@@ -560,47 +560,13 @@ function renderPage(){
 function updateTop(){const v=$('#vp-value');if(v)v.textContent=Number(state.vp).toLocaleString();const s=$('#data-status');if(s){s.textContent=['full','full-csv'].includes(state.dataState)?`図鑑 ${state.data.dex.length.toLocaleString()} / 技 ${Object.keys(state.data.movesById||{}).length.toLocaleString()}`:state.dataState==='moves-csv'?`技 ${Object.keys(state.data.movesById||{}).length.toLocaleString()}件（CSV）` :state.dataState==='learnsets-csv'?`技 ${Object.keys(state.data.movesById||{}).length.toLocaleString()} / 習得技CSV` :state.dataState==='partial'?`一部データ：技 ${Object.keys(state.data.movesById||{}).length.toLocaleString()}件`:'読込中';const pill=s.closest('.connection-pill');if(pill)pill.classList.toggle('warn',!['full','full-csv'].includes(state.dataState));}}
 function pageHeader(kicker,title,desc,action=''){return `<div class="page-title"><div><div class="section-kicker">${esc(kicker)}</div><h1>${title}</h1><p>${desc}</p></div>${action}</div>`;}
 function statTile(label,value,sub){return `<div class="stat-tile"><span>${label}</span><b>${value}</b><small>${sub}</small></div>`;}
-function renderHome(){
- const team=state.team.map(uid=>state.owned.find(m=>m.uid===uid)).filter(Boolean).slice(0,6);
- const preview=team.length?team:state.owned.slice(0,6);
- const heroSpecies=findSpecies('lucario')||findSpecies('charizard')||state.data.dex[0];
- const menuItems=[
-  {label:'バトル',sub:'CPUチームと対戦',icon:'⚔',action:'start-battle',tone:'battle'},
-  {label:'ポケモンボックス',sub:'仲間のポケモンを整理',page:'box',icon:'▧',tone:'box'},
-  {label:'スカウト',sub:'新しいポケモンを仲間に',page:'scout',icon:'✦',tone:'scout'},
-  {label:'トレーニング',sub:'技・特性・能力を調整',page:'training',icon:'⌁',tone:'training'},
-  {label:'全国図鑑',sub:'ポケモンのデータを検索',page:'dex',icon:'◉',tone:'dex'},
-  {label:'技図鑑',sub:'威力・命中・効果を確認',page:'moves',icon:'✧',tone:'moves'},
-  {label:'特性図鑑',sub:'特性の効果を確認',page:'abilities',icon:'◈',tone:'abilities'},
-  {label:'アイテムショップ',sub:'VPでアイテムを購入',page:'shop',icon:'◇',tone:'shop'}
- ];
- const menuHtml=menuItems.map(item=>{
-  const target=item.page?'data-page="'+item.page+'"':'data-action="'+item.action+'"';
-  return '<button class="hub-menu-button '+item.tone+'" '+target+'><span class="hub-menu-icon">'+item.icon+'</span><span class="hub-menu-copy"><b>'+item.label+'</b><small>'+item.sub+'</small></span><span class="hub-menu-arrow">›</span></button>';
- }).join('');
- const teamHtml=Array.from({length:6},(_,i)=>{
-  const mon=preview[i];
-  return mon
-   ?'<button class="hub-team-card" data-action="open-owned" data-uid="'+esc(mon.uid)+'"><span class="hub-team-sprite">'+speciesIcon(mon)+'</span><b>'+esc(mon.name||getPokeName(monSpecies(mon)))+'</b><small>Lv.'+(mon.level||50)+(mon.shiny?' ✦':'')+'</small></button>'
-   :'<button class="hub-team-card empty" data-page="scout"><span class="hub-team-empty">＋</span><b>空き枠</b><small>スカウト</small></button>';
- }).join('');
- return `
- <section class="home-hub">
-  <div class="hub-heading">
-   <div><div class="section-kicker">TRAINER HUB / NATIONAL DEX BATTLE LAB</div><h1>ホーム</h1><p>次のバトルへ。ポケモンを整えて、勝利をつかもう。</p></div>
-   <div class="hub-credits"><div><small>VP BALANCE</small><b>◆ ${state.vp.toLocaleString()} VP</b></div><div><small>OWNED POKÉMON</small><b>${state.owned.length.toLocaleString()} <span>/ 仲間</span></b></div></div>
-  </div>
-  <div class="hub-main-grid">
-   <section class="hub-hero">
-    <div class="hub-hero-copy"><div class="hero-tag">✦ 2D BATTLE LAB <span>・ FAN PROTOTYPE</span></div><h2>勝負を決めるのは、<br><span>トレーナーの戦略。</span></h2><p>技・特性・持ち物を整えて、自分だけのチームでバトルに挑もう。</p><div class="hero-actions"><button class="btn btn-primary" data-action="start-battle">⚔　バトルを始める</button><button class="btn btn-ghost" data-page="scout">＋　スカウト</button></div></div>
-    <div class="hub-hero-art"><div class="ring"></div>${heroSpecies?speciesIcon(heroSpecies):''}</div>
-   </section>
-   <section class="panel hub-team-panel"><div class="panel-head"><div><div class="section-kicker">YOUR PARTY</div><h2>バトルチーム <span>${state.team.length}/6</span></h2></div><button class="btn btn-ghost btn-sm" data-page="training">編集 ↗</button></div><div class="panel-body"><div class="hub-team-grid">${teamHtml}</div><p class="hub-team-note">ポケモンを選ぶと個体情報を確認できます。</p></div></section>
-  </div>
-  <section class="hub-menu-section"><div class="hub-menu-heading"><div><div class="section-kicker">GAME MENU</div><h2>メニュー</h2></div><button class="btn btn-ghost btn-sm" data-action="help">遊び方ガイド　?</button></div><div class="hub-menu-grid">${menuHtml}</div></section>
-  <div class="hub-footer"><span>POKÉMON CHAMPIONS 2D BATTLE LAB</span><span>非公式ファンメイド試作版</span><button data-page="settings">⚙ 設定・セーブ</button></div>
- </section>`;
-}
+function renderHome(){const team=state.team.map(uid=>state.owned.find(m=>m.uid===uid)).filter(Boolean).slice(0,6);const preview=team.length?team:state.owned.slice(0,6);const latest=state.battle?.log?.slice(-4).reverse()||[];const heroSpecies=findSpecies('lucario')||findSpecies('charizard')||state.data.dex[0];return `${pageHeader('TRAINER HUB','バトルの準備はできた？','手持ちを整え、戦術を組み立て、次の勝利をつかもう。','<button class="btn btn-ghost" data-action="help">遊び方ガイド　?</button>')}
+ <section class="home-hero"><div class="hero-content"><div class="hero-tag">✦ NATIONAL DEX BATTLE LAB <span>・ FAN PROTOTYPE</span></div><h2>勝負を決めるのは、<br><span>トレーナーの戦略。</span></h2><p>ポケモンを選び、技・特性・持ち物を整え、ターンごとに最善手を選択。天候、状態異常、能力ランク、タイプ相性を使いこなせ。</p><div class="hero-actions"><button class="btn btn-primary" data-action="start-battle">⚔　バトルを始める</button><button class="btn btn-ghost" data-page="scout">＋　ポケモンをスカウト</button></div></div><div class="hero-art"><div class="ring"></div>${heroSpecies?speciesIcon(heroSpecies):''}</div></section>
+ <div class="stats-strip">${statTile('OWNED POKÉMON',state.owned.length.toLocaleString(),'ボックス内の個体数')}${statTile('TEAM MEMBERS',state.team.length,'対戦チーム / 6匹')}${statTile('VP BALANCE',state.vp.toLocaleString(),'バトル・ミッション報酬')}${statTile('NATIONAL DEX',selectableDex().length.toLocaleString(),'内蔵図鑑から選択可能な種類')}</div>
+ <div class="grid home-columns"><section class="panel"><div class="panel-head"><h2>⚡　バトルチーム</h2><button class="btn btn-ghost btn-sm" data-page="training">チーム・育成を編集　↗</button></div><div class="panel-body"><div class="team-grid">${Array.from({length:6},(_,i)=>{const mon=preview[i];return mon?`<button class="team-card" data-action="open-owned" data-uid="${esc(mon.uid)}">${speciesIcon(mon)}<b>${esc(mon.name||getPokeName(monSpecies(mon)))}</b><small>Lv.${mon.level||50}${mon.shiny?' ✦':''}</small>${typesHtml(monSpecies(mon)?.types||[])}</button>`:`<button class="team-card" data-page="scout"><div style="font-size:30px;color:#657398;padding:20px 0">＋</div><b>空き枠</b><small>スカウト</small></button>`}).join('')}</div><p class="footer-note">個体値の厳選は行わず、トレーニング画面で能力・特性・技を調整できます。大会レギュレーションとは異なる独自の全国図鑑ルールです。</p></div></section>
+ <section class="panel"><div class="panel-head"><h2>✦　クイックメニュー</h2></div><div class="panel-body"><div class="list"><div class="activity-row"><div class="activity-icon">⚔</div><div class="activity-copy"><b>ソロバトル</b><small>CPUチームとターン制対戦</small></div><button class="btn btn-secondary btn-sm" data-action="start-battle">対戦</button></div><div class="activity-row"><div class="activity-icon">◉</div><div class="activity-copy"><b>全国図鑑</b><small>種族・フォルムを検索</small></div><button class="btn btn-secondary btn-sm" data-page="dex">開く</button></div><div class="activity-row"><div class="activity-icon">✦</div><div class="activity-copy"><b>VPスカウト</b><small>欲しいポケモンを直接選択</small></div><button class="btn btn-secondary btn-sm" data-page="scout">選ぶ</button></div><div class="activity-row"><div class="activity-icon">⌁</div><div class="activity-copy"><b>トレーニング</b><small>技・特性・努力値を調整</small></div><button class="btn btn-secondary btn-sm" data-page="training">調整</button></div></div></div></section></div>
+ <div class="panel" style="margin-top:16px"><div class="panel-head"><h2>RECENT BATTLE LOG / 最近の戦況</h2><span class="pill">TURN-BASED</span></div><div class="panel-body">${latest.length?`<div class="list">${latest.map(x=>`<div class="activity-row"><div class="activity-icon">${x.includes('倒れた')?'✦':'⚡'}</div><div class="activity-copy"><b>${esc(x)}</b><small>直近のバトルログ</small></div></div>`).join('')}</div>`:`<div class="empty-state">まだバトルログがありません。<br><small>最初の対戦を始めてみよう。</small></div>`}</div></div>
+ <p class="footer-note">© Pokémon names and data belong to their respective owners. This is an unofficial fan-made prototype, not affiliated with Nintendo, Creatures, GAME FREAK or The Pokémon Company. Data providers and attribution are listed in Settings.</p>`;}
 function filteredDexList(limit=state.dexLoad){let list=selectableDex();const q=searchKey(state.dexSearch);if(q)list=list.filter(p=>searchKey(p.name).includes(q)||searchKey(p.jpName).includes(q)||String(p.num).includes(q)||searchKey(p.displayName).includes(q));if(state.dexType!=='all')list=list.filter(p=>p.types.includes(state.dexType));return list.slice(0,limit);}
 function dexCard(p,selected=false){const owned=hasSpeciesOwned(p.id);return `<button class="dex-card ${selected?'selected':''}" data-action="select-dex" data-id="${esc(p.id)}"><span class="dex-number">#${String(p.num).padStart(4,'0')}</span>${owned?'<span class="owned-dot">●</span>':''}${speciesIcon(p)}<strong>${esc(getPokeName(p))}</strong>${typesHtml(p.types||[])}</button>`;}
 function renderDex(){const selected=state.data.dexById[state.selectedDex]&&isSelectableFinalSpecies(state.data.dexById[state.selectedDex])?state.data.dexById[state.selectedDex]:(selectableDex()[0]||null);const list=filteredDexList();return `${pageHeader('NATIONAL POKÉDEX','全国図鑑','HTML内蔵の全国図鑑1025種を検索。カードを選ぶと種族値・タイプ・特性・入手状況が見られます。')}
