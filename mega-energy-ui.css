@@ -1,0 +1,5 @@
+.mega-energy-action{border-color:#f1c5ff;background:linear-gradient(110deg,#6742a4,#b34d93 55%,#e29c4d);color:#fff;box-shadow:0 8px 22px #ba70ff2c}
+.mega-energy-action:disabled{background:#30374d;color:#8993aa;border-color:#46516b;box-shadow:none}
+.mega-energy-burst{position:absolute;z-index:16;width:2px;height:2px;pointer-events:none}
+.mega-energy-burst i{position:absolute;left:0;top:0;width:8px;height:8px;border-radius:2px;background:linear-gradient(135deg,#fff,#f5aaff 55%,#ffe59b);box-shadow:0 0 12px #f8b7ff,0 0 22px #9beaff;transform:rotate(var(--a)) translateY(-8px);opacity:0;animation:megaEnergyShard .72s var(--delay,0s) ease-out forwards}
+@keyframes megaEnergyShard{0%{opacity:0;transform:rotate(var(--a)) translateY(-8px) scale(.25)}18%{opacity:1}100%{opacity:0;transform:rotate(var(--a)) translateY(calc(-1 * var(--d))) scale(.05)}}

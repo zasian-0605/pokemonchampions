@@ -1,0 +1,14 @@
+.dex-research-panel{margin:0 0 18px;border:1px solid #3b4b70;background:linear-gradient(145deg,#171f38,#101629);border-radius:16px;overflow:hidden}
+.dex-research-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 17px;border-bottom:1px solid #ffffff14;flex-wrap:wrap}
+.dex-research-head h2{font-size:15px;margin:0}.dex-research-head p{font-size:10px;color:#9eaccd;margin:5px 0 0}
+.dex-research-body{padding:15px 17px}.dex-research-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:13px}
+.dex-research-stat{border:1px solid #2d3a5a;border-radius:11px;padding:10px;background:#0e1528;min-width:0}
+.dex-research-stat small{display:block;font-size:9px;color:#93a1c4}.dex-research-stat b{display:block;font:800 23px 'Barlow Condensed',sans-serif;margin-top:3px;color:#f7f8ff}
+.dex-research-progress{height:8px;border-radius:9px;background:#29334f;overflow:hidden;margin:7px 0 4px}.dex-research-progress i{height:100%;display:block;background:linear-gradient(90deg,#58e4f3,#65e5aa);border-radius:9px}
+.dex-research-tools{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0 9px}.dex-research-tools .field{flex:1;min-width:150px}
+.dex-research-table{max-height:340px;overflow:auto;border:1px solid #2d3a58;border-radius:10px}
+.dex-research-table table{width:100%;border-collapse:collapse;font-size:10px}.dex-research-table th,.dex-research-table td{padding:8px 9px;border-bottom:1px solid #ffffff0d;text-align:left;white-space:nowrap}.dex-research-table th{position:sticky;top:0;background:#1a2440;color:#aab9da;z-index:1}
+.dex-research-row{border:0;background:transparent;color:inherit;text-align:left;padding:0;font-weight:800;cursor:pointer}.dex-research-row:hover{color:var(--cyan)}
+.dex-research-mark{display:inline-block;min-width:46px;text-align:center;border-radius:5px;padding:3px 5px;font-size:9px;background:#303952;color:#9ba9c9}.dex-research-mark.done{background:#174b43;color:#9af0c9}.dex-research-note{font-size:10px;color:#8e9cbc;line-height:1.7;margin:8px 0 0}
+.dex-research-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+@media(max-width:650px){.dex-research-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.dex-research-head{align-items:flex-start}.dex-research-table table{font-size:9px}.dex-research-table th,.dex-research-table td{padding:7px 6px}}

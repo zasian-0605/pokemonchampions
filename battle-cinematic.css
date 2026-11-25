@@ -1,0 +1,23 @@
+/* v15 cinematic move sequence: focus cut, travelling move effect, impact reveal */
+.battle-cinematic-overlay{position:absolute;z-index:12;inset:0;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .22s ease;overflow:hidden}
+.battle-cinematic-overlay.is-visible{opacity:1;visibility:visible}
+.battle-cinematic-vignette{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 48%,transparent 15%,#060a19a8 100%);box-shadow:inset 0 0 55px #02040ac9}
+.battle-cinematic-overlay:before{content:'';position:absolute;inset:0;background:linear-gradient(115deg,#111a37a6,transparent 54%,#080d1f55);opacity:.86}
+.battle-cinematic-caption{position:absolute;left:50%;bottom:15px;transform:translateX(-50%) translateY(10px);width:max-content;max-width:calc(100% - 24px);min-width:min(230px,calc(100% - 24px));padding:10px 16px 11px;text-align:center;border:1px solid #c9e3ff7a;border-radius:13px;background:linear-gradient(115deg,#0b1125ee,#111b35ee);box-shadow:0 8px 28px #0008,0 0 20px #5cc7f22a;opacity:0;transition:opacity .18s,transform .22s;backdrop-filter:blur(8px)}
+.battle-cinematic-overlay.is-visible .battle-cinematic-caption{opacity:1;transform:translateX(-50%) translateY(0)}
+.battle-cinematic-kicker{display:block;font:800 8px 'Barlow Condensed',sans-serif;letter-spacing:.24em;color:#80eaff;margin-bottom:3px}
+.battle-cinematic-caption b{display:block;font:900 clamp(18px,3.8vw,27px)/1.05 'Barlow Condensed',sans-serif;color:#fff;text-shadow:0 0 17px #79dfff88;white-space:normal;overflow-wrap:anywhere}
+.battle-cinematic-caption small{display:block;margin-top:4px;font-size:10px;color:#c5d3f1;line-height:1.4}
+.battlefield.cine-focus-player .battle-mon.cine-selected{z-index:15;transform:translate(7%,-4%) scale(1.27);filter:drop-shadow(0 0 18px #69e8ff66) drop-shadow(0 12px 7px #0008)}
+.battlefield.cine-focus-enemy .battle-mon.cine-selected{z-index:15;transform:translate(-7%,4%) scale(1.25);filter:drop-shadow(0 0 18px #ff8dbe70) drop-shadow(0 12px 7px #0008)}
+.battlefield.cine-focus-player .battle-mon:not(.cine-selected),.battlefield.cine-focus-enemy .battle-mon:not(.cine-selected){opacity:.48;filter:brightness(.64) saturate(.78);transition:opacity .22s,filter .22s,transform .22s}
+.battlefield.cine-focus-player .battle-platform.player,.battlefield.cine-focus-enemy .battle-platform.enemy{filter:brightness(1.35);box-shadow:0 0 25px #d7f8ff20}
+.cinematic-projectile{position:absolute;z-index:20;width:25px;height:25px;left:0;top:0;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 8%,var(--projectile-color,#fff) 27%,color-mix(in srgb,var(--projectile-color,#fff),#0a1028 35%) 72%,transparent 75%);box-shadow:0 0 14px var(--projectile-color,#fff),0 0 32px var(--projectile-color,#fff);pointer-events:none;will-change:transform,opacity}
+.cinematic-projectile:after{content:'';position:absolute;width:42px;height:8px;right:14px;top:8px;border-radius:99px;background:linear-gradient(90deg,transparent,var(--projectile-color,#fff));filter:blur(2px);transform:rotate(-16deg);transform-origin:right center}
+.cinematic-projectile.physical{width:33px;height:12px;border-radius:4px;background:linear-gradient(180deg,#fff,var(--projectile-color,#fff) 35%,#fff6);box-shadow:0 0 12px var(--projectile-color,#fff),0 0 28px var(--projectile-color,#fff);transform-origin:center}
+.cinematic-projectile.status{width:19px;height:19px;box-shadow:0 0 20px var(--projectile-color,#fff),0 0 38px var(--projectile-color,#fff)}
+.cinematic-impact-ring{position:absolute;z-index:21;left:0;top:0;width:28px;height:28px;border:3px solid var(--projectile-color,#fff);border-radius:50%;box-shadow:0 0 18px var(--projectile-color,#fff),inset 0 0 10px var(--projectile-color,#fff);pointer-events:none;will-change:transform,opacity}
+.battlefield.cine-focus-player .battle-cinematic-vignette:after,.battlefield.cine-focus-enemy .battle-cinematic-vignette:after{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,#ffffff0b 50%,transparent 65%);animation:cinematicSweep .55s ease-out}
+@keyframes cinematicSweep{from{transform:translateX(-80%)}to{transform:translateX(80%)}}
+@media(prefers-reduced-motion:reduce){.battle-cinematic-overlay,.battle-cinematic-caption,.battlefield.cine-focus-player .battle-mon.cine-selected,.battlefield.cine-focus-enemy .battle-mon.cine-selected{transition:none}.battle-cinematic-vignette:after{animation:none!important}}
+
