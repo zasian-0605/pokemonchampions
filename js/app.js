@@ -64,6 +64,11 @@ function searchKey(s){return String(s??'').normalize('NFKC').toLocaleLowerCase()
 function setLoad(pct,msg){const bar=$('#loadbar'),st=$('#loadstatus');if(bar)bar.style.width=`${pct}%`;if(st)st.textContent=msg;}
 const OFFLINE_DATABASE=window.POKEMON_CHAMPIONS_OFFLINE_DATA||JSON.parse($('#offline-data')?.textContent||'{}');
 async function loadAllData(){
+ const upstreamReady=window.POKEMON_CHAMPIONS_UPSTREAM_READY;
+ if(upstreamReady){
+  setLoad(5,'GitHubから技・特性の補助データを取得中…');
+  await upstreamReady;
+ }
  const db=OFFLINE_DATABASE;
  if(!db||!Array.isArray(db.dex)||db.dex.length<1000||!db.moves||Object.keys(db.moves).length<700)throw new Error('HTML内蔵データを読み込めません。ファイルが完全に保存されているか確認してください。');
  setLoad(12,'HTML内蔵の全国図鑑データを整理中…');
@@ -78,6 +83,7 @@ async function loadAllData(){
  data.movesById=db.moves;
  // Attach upstream reference data as nested metadata. It does not alter the active battle formulas.
  data.upstreamMechanics=window.POKEMON_CHAMPIONS_UPSTREAM_MECHANICS||null;
+ data.upstreamSource=window.POKEMON_CHAMPIONS_UPSTREAM_SOURCE||'none';
  data.upstreamSummary={movesAttached:0,abilitiesAttached:0};
  if(data.upstreamMechanics?.movesByApiId){
   for(const move of Object.values(data.movesById)){
