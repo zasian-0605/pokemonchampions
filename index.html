@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+<head>
+<meta charset="utf-8"/><meta content="width=device-width,initial-scale=1,viewport-fit=cover" name="viewport"/>
+<meta content="#101127" name="theme-color"/><title>Pokémon Champions 2D — v18.2 全国図鑑調査・統合修正版</title>
+<link rel="stylesheet" href="css/base.css" />
+<link rel="stylesheet" href="css/battle-cinematic.css" />
+<link rel="stylesheet" href="css/raid-result.css" />
+</head>
+<body>
+<div class="boot-screen" id="boot">
+<div class="boot-orbit"><span class="orbit-dot"></span><div class="pokeball-mark"><i></i></div></div>
+<div class="boot-kicker">TURN-BASED BATTLE LAB</div>
+<h1>POKÉMON <b>CHAMPIONS</b></h1><div class="boot-sub">2D BATTLE PROTOTYPE</div>
+<p class="boot-note">図鑑・技・特性・タイプ・習得技はHTML内蔵データを使用します。通信は画像だけです</p>
+<div class="load-track"><span id="loadbar"></span></div><div class="load-status" id="loadstatus">内蔵データを準備中…</div>
+<button class="btn btn-primary" disabled="" id="bootstart">ゲームを起動</button>
+<small>非公式ファンメイド試作版。公式ゲーム・公式サービスではありません。</small>
+</div>
+<div class="app hidden" id="app">
+<header class="topbar">
+<button aria-label="ホームに戻る" class="brand" data-page="home"><span class="brand-ball"><i></i></span><span>POKÉMON <b>CHAMPIONS</b><small>2D BATTLE LAB</small></span></button>
+<div class="top-meta"><span class="connection-pill"><i></i><span id="data-status">データ準備中</span></span><span class="vp-pill"><span class="vp-gem">◆</span><b id="vp-value">1,000</b><small>VP</small></span><button aria-label="セーブを書き出す" class="icon-btn" id="save-btn" title="セーブを書き出す">⇧</button><button class="icon-btn" id="help-btn" title="遊び方">?</button></div>
+</header>
+<div class="layout">
+<aside class="sidebar">
+<div class="side-label">MAIN MENU</div>
+<button class="nav-item active" data-page="home"><span>▦</span><b>ホーム</b><small>HOME</small></button>
+<button class="nav-item" data-page="battle"><span>⚔</span><b>バトル</b><small>BATTLE</small></button>
+<button class="nav-item" data-page="box"><span>▧</span><b>ポケモンボックス</b><small>BOX</small></button>
+<button class="nav-item" data-page="dex"><span>◉</span><b>全国図鑑</b><small>POKÉDEX</small></button>
+<button class="nav-item" data-page="moves"><span>✦</span><b>技図鑑</b><small>MOVES</small></button>
+<button class="nav-item" data-page="abilities"><span>◈</span><b>特性図鑑</b><small>ABILITIES</small></button>
+<button class="nav-item" data-page="scout"><span>✦</span><b>スカウト</b><small>RECRUIT</small></button>
+<button class="nav-item" data-page="care"><span>🥚</span><b>孵化・育成</b><small>CARE LAB</small></button>
+<button class="nav-item" data-page="training"><span>⌁</span><b>トレーニング</b><small>TRAINING</small></button>
+<button class="nav-item" data-page="shop"><span>◇</span><b>アイテムショップ</b><small>ITEM SHOP</small></button>
+<div class="sidebar-bottom"><div class="season-card"><div class="season-top"><span>REGULATION</span><b>2D-NATIONAL</b></div><div class="season-line"><i></i></div><p>全国図鑑ルール</p><small>提供データ収録の全国図鑑1025種（基本形）</small></div><button class="nav-item slim" data-page="settings"><span>⚙</span><b>設定・セーブ</b></button></div>
+</aside>
+<main class="main-content" id="main" tabindex="-1"></main>
+</div>
+<nav class="mobile-nav">
+<button class="active" data-page="home"><span>▦</span><small>ホーム</small></button><button data-page="battle"><span>⚔</span><small>バトル</small></button><button data-page="box"><span>▧</span><small>ボックス</small></button><button data-page="dex"><span>◉</span><small>図鑑</small></button><button data-page="moves"><span>✦</span><small>技</small></button><button data-page="abilities"><span>◈</span><small>特性</small></button><button data-page="scout"><span>✦</span><small>スカウト</small></button><button data-page="care"><span>🥚</span><small>育成</small></button><button data-page="shop"><span>◇</span><small>ショップ</small></button>
+</nav>
+</div>
+<div id="modal-root"></div><div aria-live="polite" class="toast-root" id="toast-root"></div>
+<script src="js/offline-data.js" ></script>
+<script src="js/app.js" ></script>
+<link rel="stylesheet" href="css/breeding-care.css" />
+<link rel="stylesheet" href="css/move-taxonomy.css" />
+<link rel="stylesheet" href="css/move-classification.css" />
+<link rel="stylesheet" href="css/tera-mega.css" />
+<script src="js/patches/v17-7-mega-energy-inventory-fix.js" ></script>
+<link rel="stylesheet" href="css/mega-energy-ui.css" />
+<script src="js/patches/v17-8-mega-system-rebuild.js" ></script>
+<script src="js/patches/v17-9-inventory-safe-migration.js" ></script>
+<script src="js/patches/v18-mega-shop-rebuild.js" ></script>
+<script src="js/patches/v18-1-sprite-audit.js" ></script>
+
+<link rel="stylesheet" href="css/national-dex.css" />
+<script src="js/patches/v18-2-full-integration.js" ></script>
+
+<!-- v18.5 fix: Defiant/Competitive/Rattled react only to opponent-caused stat drops; self-inflicted drops (e.g. Superpower) do not activate them. -->
+</body></html>
