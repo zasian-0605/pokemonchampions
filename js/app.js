@@ -76,6 +76,15 @@ async function loadAllData(){
  setLoad(34,'技・追加効果・習得技を接続中…');
  data.moves=db.moves;
  data.movesById=db.moves;
+ // Attach upstream reference data as nested metadata. It does not alter the active battle formulas.
+ data.upstreamMechanics=window.POKEMON_CHAMPIONS_UPSTREAM_MECHANICS||null;
+ data.upstreamSummary={movesAttached:0,abilitiesAttached:0};
+ if(data.upstreamMechanics?.movesByApiId){
+  for(const move of Object.values(data.movesById)){
+   const source=data.upstreamMechanics.movesByApiId[String(move?.apiId??'')];
+   if(source){move.upstreamData=source;data.upstreamSummary.movesAttached++;}
+  }
+ }
  data.moveAliases={...(db.moveAliases||{})};
  data.moveApiIdToKey=db.moveApiIdToKey||{};
  // Normalize lookup aliases without changing the stored move records or learnset IDs.
@@ -98,6 +107,13 @@ async function loadAllData(){
  data.moveEffects=new Map(Object.values(db.moves).map(m=>[slug(m.id),m.mechanicDescription||'']));
  setLoad(58,'特性の日本語名・効果説明を接続中…');
  data.abilitiesList=db.abilities||[];
+ if(data.upstreamMechanics?.abilitiesById){
+  for(const ability of data.abilitiesList){
+   const key=slug(ability?.id||ability?.slug||ability?.name||'');
+   const source=data.upstreamMechanics.abilitiesById[key];
+   if(source){ability.upstreamData=source;data.upstreamSummary.abilitiesAttached++;}
+  }
+ }
  data.abilityNames=new Map(Object.entries(db.abilityNames||{}));
  data.abilityDesc=new Map(Object.entries(db.abilityDescriptions||{}));
  data.types=db.types||[];
