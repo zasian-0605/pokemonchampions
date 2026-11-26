@@ -17,6 +17,75 @@ async function main() {
   assert.ok(catalog.abilities.some(item => item.id === "quarkdrive"));
   assert.ok(catalog.items.some(item => item.id === "boosterenergy"));
 
+  // Validate team input before battle creation; no invalid values may be silently discarded.
+  const zeroEvTeam = service.validateTeam([{
+    species:"snorlax",
+    moves:["body-slam"],
+    evs:{hp:0,atk:0,def:0,spa:0,spd:0,spe:0}
+  }]);
+  assert.equal(zeroEvTeam[0].evs.hp, 1, "all-zero EV spread should become 1 HP EV");
+  assert.equal(
+    Object.values(zeroEvTeam[0].evs).reduce((sum, value) => sum + value, 0),
+    1,
+    "all-zero EV spread should not receive any other EVs"
+  );
+
+  assert.throws(
+    () => service.validateTeam([{species:"snorlax",moves:["not-a-real-move"]}]),
+    /技データにありません/,
+    "unknown moves must be rejected instead of silently removed"
+  );
+  assert.throws(
+    () => service.validateTeam([{species:"snorlax",moves:["body-slam","tackle","rest","earthquake","protect"]}]),
+    /4つまで/,
+    "more than four moves must be rejected instead of truncated"
+  );
+  assert.throws(
+    () => service.validateTeam([{species:"snorlax",moves:["body-slam","body-slam"]}]),
+    /重複/,
+    "duplicate moves must be rejected"
+  );
+  assert.throws(
+    () => service.validateTeam([{species:"snorlax",moves:["body-slam"],abilityId:"not-a-real-ability"}]),
+    /特性データにありません/,
+    "unknown abilities must be rejected"
+  );
+  assert.throws(
+    () => service.validateTeam([{species:"snorlax",moves:["body-slam"],abilityId:"hugepower"}]),
+    /使用できません/,
+    "abilities unavailable to a species must be rejected"
+  );
+  assert.throws(
+    () => service.validateTeam([{species:"snorlax",moves:["body-slam"],nature:"not-a-nature"}]),
+    /正しい性格データではありません/,
+    "unknown natures must be rejected"
+  );
+  assert.throws(
+    () => service.validateTeam([{species:"snorlax",moves:["body-slam"],ivs:{hp:32}}]),
+    /個体値/,
+    "IVs outside 0-31 must be rejected instead of clamped"
+  );
+  assert.throws(
+    () => service.validateTeam([{species:"snorlax",moves:["body-slam"],evs:{hp:253}}]),
+    /努力値/,
+    "EVs above 252 in one stat must be rejected instead of clamped"
+  );
+  assert.throws(
+    () => service.validateTeam([{species:"snorlax",moves:["body-slam"],evs:{hp:252,atk:252,def:7}}]),
+    /510を超えています/,
+    "EV totals above 510 must be rejected"
+  );
+  assert.throws(
+    () => service.validateTeam([{species:"snorlax",moves:["body-slam"],level:101}]),
+    /レベルは1〜100/,
+    "levels outside 1-100 must be rejected"
+  );
+  assert.throws(
+    () => service.validateTeam([{species:"snorlax",moves:["body-slam"],teraType:"Light"}]),
+    /テラスタイプ/,
+    "unknown Tera types must be rejected"
+  );
+
   const first = await service.createBattle({
     playerName: "Gen9 Test",
     playerTeam: [{
