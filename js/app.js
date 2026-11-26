@@ -66,7 +66,7 @@ const OFFLINE_DATABASE=window.POKEMON_CHAMPIONS_OFFLINE_DATA||JSON.parse($('#off
 async function loadAllData(){
  const upstreamReady=window.POKEMON_CHAMPIONS_UPSTREAM_READY;
  if(upstreamReady){
-  setLoad(5,'GitHubから技・特性の補助データを取得中…');
+  setLoad(5,'Pokémon Showdownから技・特性データを取得中…');
   await upstreamReady;
  }
  const db=OFFLINE_DATABASE;
@@ -85,11 +85,12 @@ async function loadAllData(){
  data.upstreamMechanics=window.POKEMON_CHAMPIONS_UPSTREAM_MECHANICS||null;
  data.upstreamSource=window.POKEMON_CHAMPIONS_UPSTREAM_SOURCE||'none';
  data.upstreamSummary={movesAttached:0,abilitiesAttached:0};
- if(data.upstreamMechanics?.movesByApiId){
-  for(const move of Object.values(data.movesById)){
-   const source=data.upstreamMechanics.movesByApiId[String(move?.apiId??'')];
-   if(source){move.upstreamData=source;data.upstreamSummary.movesAttached++;}
-  }
+ const showdownMovesById=data.upstreamMechanics?.movesById||{};
+ const legacyMovesByApiId=data.upstreamMechanics?.movesByApiId||{};
+ for(const [moveKey,move] of Object.entries(data.movesById)){
+  const source=showdownMovesById[slug(move?.id||move?.name||moveKey)]||
+   legacyMovesByApiId[String(move?.apiId??'')];
+  if(source){move.upstreamData=source;data.upstreamSummary.movesAttached++;}
  }
  data.moveAliases={...(db.moveAliases||{})};
  data.moveApiIdToKey=db.moveApiIdToKey||{};
