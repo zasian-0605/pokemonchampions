@@ -81,7 +81,7 @@ async function loadAllData(){
  setLoad(34,'技・追加効果・習得技を接続中…');
  data.moves=db.moves;
  data.movesById=db.moves;
- // Attach upstream reference data as nested metadata. It does not alter the active battle formulas.
+ // Store external reference metadata separately. Embedded records and battle formulas stay untouched.
  data.upstreamMechanics=window.POKEMON_CHAMPIONS_UPSTREAM_MECHANICS||null;
  data.upstreamSource=window.POKEMON_CHAMPIONS_UPSTREAM_SOURCE||'none';
  // Keep fetched reference data separate: do not modify embedded move/ability records.
@@ -111,7 +111,6 @@ async function loadAllData(){
  data.moveEffects=new Map(Object.values(db.moves).map(m=>[slug(m.id),m.mechanicDescription||'']));
  setLoad(58,'特性の日本語名・効果説明を接続中…');
  data.abilitiesList=db.abilities||[];
- 
  data.abilityNames=new Map(Object.entries(db.abilityNames||{}));
  data.abilityDesc=new Map(Object.entries(db.abilityDescriptions||{}));
  data.types=db.types||[];
