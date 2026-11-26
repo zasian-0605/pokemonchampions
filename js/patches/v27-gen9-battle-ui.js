@@ -3,7 +3,7 @@
   "use strict";
   const W=window, APP=()=>W.PokemonChampions2D, S=()=>APP()?.state, API="/api/gen9";
   const statusJa={brn:"やけど",par:"まひ",slp:"ねむり",frz:"こおり",psn:"どく",tox:"もうどく"};
-  let session=null, team=[], busy=false, errorText="", gimmick="", onlineSocket=null, onlineRoomCode="", onlineStatus="", waitingForOpponent=false, opponentName="CPU", diagnosticBusy=false, diagnosticReport="";
+  let session=null, team=[], busy=false, errorText="", gimmick="", onlineSocket=null, onlineRoomCode="", onlineStatus="", waitingForOpponent=false, opponentName="CPU", diagnosticBusy=false, diagnosticReport="", randomSearching=false, onlineMode="private";
   const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const idOf=v=>String(v||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
   async function api(path,options){
@@ -22,7 +22,12 @@
   function buildTeam(){
     return selectedOwned().map(m=>({
       uid:m.uid,name:m.name,nickname:m.name,species:m.speciesId||m.formId,speciesId:m.speciesId||m.formId,
-      level:Number(m.level||50),moves:(m.moves||[]).slice(0,4).map(x=>typeof x==="string"?x:x?.id).filter(Boolean),
+      level:Number(m.level||50),
+      moves:(m.moves||[]).slice(0,4).map(value=>{
+        const key=typeof value==="string"?value:(value?.id||value?.name||"");
+        const record=APP()?.getMove?.(key)||(typeof value==="object"?value:null);
+        return String(record?.showdownId||record?.showdownID||record?.showdownMoveId||key||"").trim();
+      }).filter(Boolean),
       abilityId:m.abilityId||"",heldItem:m.heldItem||"",nature:m.nature||"まじめ",ivs:m.ivs||{},evs:m.evs||{},
       shiny:!!m.shiny,teraType:m.teraType||""
     }));
@@ -86,7 +91,19 @@
     const code=onlineRoomCode ? '<div class="g9-room-code"><small>ルームコード</small><b>'+esc(onlineRoomCode)+'</b></div>' : "";
     const status=onlineStatus ? '<p class="g9-online-status">'+esc(onlineStatus)+'</p>' : "";
     const disabled=busy ? "disabled" : "";
-    return `<section class="g9-card g9-online"><h2>オンライン対戦（全世代）</h2><p>ルームコードを共有して、別のプレイヤーと全国図鑑ルールのシングル対戦をします。両方のプレイヤーが行動を選ぶとターンが進みます。</p>${status}${code}<div class="g9-online-row"><button class="g9-primary" data-g9="create-room" ${disabled}>ルームを作成</button></div><div class="g9-online-row"><input id="g9-room-code" maxlength="6" placeholder="6文字のルームコード" value=""><button class="g9-secondary" data-g9="join-room" ${disabled}>ルームに参加</button></div></section>`;
+    const randomAction=randomSearching
+      ? '<button class="g9-secondary" data-g9="random-cancel">検索をキャンセル</button>'
+      : '<button class="g9-primary" data-g9="random-match" '+disabled+'>ランダムマッチを探す</button>';
+    return `<section class="g9-card g9-online"><h2>オンライン対戦</h2>
+      <p>対戦ルールはCPU戦と同じ全国図鑑シングル。オンライン通信では両方のプレイヤーの行動をサーバーで処理します。</p>
+      ${status}
+      <div class="g9-match-mode"><h3>ランダムマッチ</h3><p>検索を始めると、同じく参加待ちのプレイヤーと自動でマッチングします。</p>${randomAction}</div>
+      <div class="g9-match-mode"><h3>プライベートマッチ</h3><p>ルームコードを共有して、対戦する相手を指定します。</p>
+        <div class="g9-online-row"><button class="g9-primary" data-g9="create-room" ${disabled}>プライベートルームを作成</button></div>
+        ${code}
+        <div class="g9-online-row"><input id="g9-room-code" maxlength="6" placeholder="6文字のルームコード" value=""><button class="g9-secondary" data-g9="join-room" ${disabled}>コードで参加</button></div>
+      </div>
+    </section>`;
   }
   async function runDiagnostic(){
     if(diagnosticBusy)return;
@@ -119,6 +136,10 @@
       check("技設定",!noMoves.length,noMoves.length?noMoves.map(m=>m.name||m.species).join("、")+" に技なし":"全員に技あり");
       check("技数",playerTeam.every(m=>m.moves.length<=4),playerTeam.map(m=>(m.name||"?")+":"+m.moves.length).join(" / "));
       check("技ID形式",playerTeam.every(m=>m.moves.every(x=>typeof x==="string"&&x.length>0)),playerTeam.map(m=>(m.name||"?")+":"+m.moves.join(",")).join(" / "));
+      const catalogMoveIds=new Set(catalog.moves.map(move=>String(move.id||"")));
+      const unknownShowdownMoves=playerTeam.flatMap(mon=>mon.moves.filter(id=>!catalogMoveIds.has(id)).map(id=>(mon.name||mon.species)+":"+id));
+      check("Showdown技ID照合",unknownShowdownMoves.length===0,unknownShowdownMoves.length?("未変換・未収録："+unknownShowdownMoves.join(" / ")):"全"+playerTeam.reduce((n,mon)=>n+mon.moves.length,0)+"技がShowdownカタログに一致");
+      if(unknownShowdownMoves.length)throw new Error("Showdownに変換できていない技IDがあります。技データの変換を確認してください。");
       check("レベル値",playerTeam.every(m=>Number.isFinite(m.level)&&m.level>=1&&m.level<=100),playerTeam.map(m=>(m.name||"?")+" Lv."+m.level).join(" / "));
       check("持ち物・特性値",playerTeam.map(m=>(m.name||"?")+" item="+(m.heldItem||"なし")+" ability="+(m.abilityId||"なし")).join(" / "));
       check("チーム送信データ",true,JSON.stringify(playerTeam).slice(0,1200));
@@ -126,7 +147,7 @@
       const battleResult=await timedFetch(API+"/battles",{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",body:JSON.stringify({playerTeam,playerName:"診断テスト"})});
       if(battleResult.error){check("対戦開始通信",false,battleResult.error.message+" / "+battleResult.ms+"ms");throw battleResult.error;}
       const battleResponse=battleResult.response,battle=battleResult.body.data||{};
-      check("対戦開始テスト",battleResponse.ok&&!!battle.battleId,"HTTP "+battleResponse.status+" / "+battleResult.ms+"ms / "+(battle.error||battle.message||battle.battleId||battleResult.body.text.slice(0,700)||"詳細なし"));
+      check("対戦開始テスト",battleResponse.ok&&!!battle.battleId,"HTTP "+battleResponse.status+" / "+(battleResponse.headers.get("content-type")||"Content-Type不明")+" / "+battleResult.ms+"ms / "+(battle.error||battle.message||battle.battleId||battleResult.body.text.slice(0,700)||"本文なし"));
       check("対戦応答形式",!!battleResult.body.data,battleResult.body.data?"JSON":"本文: "+battleResult.body.text.slice(0,700));
       if(!battleResponse.ok||!battle.battleId)throw new Error("対戦開始テスト失敗");
       if(battle.battleId&&battle.token){
@@ -182,13 +203,23 @@
       });
       socket.addEventListener("message",event=>{
         let msg;try{msg=JSON.parse(event.data);}catch(_){return;}
+        if(msg.type==="gen9-random-queued"){
+          randomSearching=true;busy=false;onlineMode="random";
+          onlineStatus="ランダムマッチの相手を探しています。画面を開いたまま待ってね。";
+          repaint();return;
+        }
+        if(msg.type==="gen9-random-cancelled"){
+          randomSearching=false;busy=false;onlineStatus="ランダムマッチの検索を終了しました。";
+          repaint();return;
+        }
         if(msg.type==="gen9-room-created"){
-          onlineRoomCode=msg.roomCode;
-          onlineStatus="相手の参加を待っています。ルームコードを共有してください。";
+          onlineRoomCode=msg.roomCode;randomSearching=false;onlineMode="private";
+          onlineStatus="プライベートルームを作成しました。ルームコードを共有してください。";
           busy=false;repaint();return;
         }
         if(msg.type==="gen9-match-ready"){
           onlineRoomCode=msg.roomCode;
+          randomSearching=false;onlineMode=msg.matchType||onlineMode;
           opponentName=msg.opponent||"対戦相手";
           session={...msg.snapshot,kind:"online",side:msg.side,playerName:msg.playerName||"プレイヤー",opponentName};
           team=selectedOwned();waitingForOpponent=false;busy=false;gimmick="";
@@ -237,11 +268,39 @@
       });
     });
   }
+  async function startRandomMatch(){
+    const playerTeam=buildTeam();
+    if(!playerTeam.length)throw new Error("先にポケモンをスカウトしてください。");
+    if(playerTeam.some(m=>!m.moves.length))throw new Error("技を覚えていないポケモンがいます。先に技を設定してください。");
+    team=selectedOwned();busy=true;errorText="";randomSearching=false;onlineMode="random";
+    onlineStatus="ランダムマッチに接続しています…";repaint();
+    try{
+      const socket=await connectOnline();
+      socket.send(JSON.stringify({type:"random-match-join",playerName:"プレイヤー",team:playerTeam}));
+      randomSearching=true;busy=false;
+      onlineStatus="マッチング中…";repaint();
+    }catch(e){
+      randomSearching=false;busy=false;
+      errorText=e.message||String(e);
+      onlineStatus="ランダムマッチに接続できませんでした。";
+      repaint();
+      throw e;
+    }
+  }
+  function cancelRandomMatch(){
+    if(onlineSocket&&onlineSocket.readyState===WebSocket.OPEN){
+      try{onlineSocket.send(JSON.stringify({type:"random-match-cancel"}));}
+      catch(e){errorText=e.message||String(e);}
+    }
+    randomSearching=false;busy=false;
+    onlineStatus="検索をキャンセルしました。";
+    repaint();
+  }
   async function createOnlineRoom(){
     const playerTeam=buildTeam();
     if(!playerTeam.length)throw new Error("先にポケモンをスカウトしてください。");
     if(playerTeam.some(m=>!m.moves.length))throw new Error("技を覚えていないポケモンがいます。先に技を設定してください。");
-    team=selectedOwned();busy=true;errorText="";onlineStatus="接続しています…";repaint();
+    team=selectedOwned();busy=true;errorText="";randomSearching=false;onlineMode="private";onlineStatus="接続しています…";repaint();
     try{
       const socket=await connectOnline();
       socket.send(JSON.stringify({type:"create-gen9-room",playerName:"プレイヤー",team:playerTeam}));
@@ -255,7 +314,7 @@
     if(playerTeam.some(m=>!m.moves.length))throw new Error("技を覚えていないポケモンがいます。先に技を設定してください。");
     const code=document.getElementById("g9-room-code")?.value?.trim().toUpperCase()||"";
     if(!/^[A-Z0-9]{6}$/.test(code))throw new Error("6文字のルームコードを入力してください。");
-    team=selectedOwned();busy=true;errorText="";onlineStatus="ルームに参加しています…";repaint();
+    team=selectedOwned();busy=true;errorText="";randomSearching=false;onlineMode="private";onlineStatus="ルームに参加しています…";repaint();
     try{
       const socket=await connectOnline();
       socket.send(JSON.stringify({type:"join-gen9-room",roomCode:code,playerName:"プレイヤー",team:playerTeam}));
@@ -304,7 +363,7 @@
     }else if(session?.kind!=="online"&&session){
       try{await api("/battles/"+encodeURIComponent(session.battleId)+"?token="+encodeURIComponent(session.token),{method:"DELETE"});}catch(_){}
     }
-    session=null;team=[];busy=false;gimmick="";waitingForOpponent=false;onlineRoomCode="";onlineStatus="";errorText="";open();
+    session=null;team=[];busy=false;gimmick="";waitingForOpponent=false;onlineRoomCode="";onlineStatus="";errorText="";randomSearching=false;onlineMode="private";open();
   }
   function installNav(){
     const sidebar=document.querySelector(".sidebar"),battle=sidebar?.querySelector('[data-page="battle"]');
@@ -335,7 +394,7 @@
   css.textContent += ".g9-diagnostic{white-space:pre-wrap;overflow-wrap:anywhere;margin:10px 0;padding:12px;border-radius:9px;background:#0c1428;color:#e4edff;border:1px solid #8294d155;font-size:11px;line-height:1.8}";
   document.head.appendChild(css);
   const onlineCss=document.createElement("style");
-  onlineCss.textContent=".g9-online{margin-top:13px}.g9-online-row{display:flex;gap:8px;align-items:center;margin-top:9px}.g9-online-row .g9-primary,.g9-online-row .g9-secondary{margin:0;width:auto}.g9-online-row input{flex:1;min-width:0;border:1px solid #8395d65c;border-radius:9px;padding:11px;background:#10182f;color:#eef2ff;text-transform:uppercase}.g9-room-code{display:flex;align-items:center;gap:12px;background:#ffffff0b;border:1px dashed #8598df66;border-radius:10px;padding:10px 12px;margin:10px 0}.g9-room-code b{font-size:25px;letter-spacing:.18em;color:#fff}.g9-room-code small,.g9-online-status{font-size:11px;color:#b9c8ef}.g9-online-status{margin:8px 0}";
+  onlineCss.textContent=".g9-online{margin-top:13px}.g9-match-mode{border-top:1px solid #ffffff18;padding-top:12px;margin-top:13px}.g9-match-mode h3{font-size:13px;margin:0 0 5px}.g9-match-mode p{font-size:11px;color:#acb9d8;line-height:1.6}.g9-online-row{display:flex;gap:8px;align-items:center;margin-top:9px}.g9-online-row .g9-primary,.g9-online-row .g9-secondary{margin:0;width:auto}.g9-online-row input{flex:1;min-width:0;border:1px solid #8395d65c;border-radius:9px;padding:11px;background:#10182f;color:#eef2ff;text-transform:uppercase}.g9-room-code{display:flex;align-items:center;gap:12px;background:#ffffff0b;border:1px dashed #8598df66;border-radius:10px;padding:10px 12px;margin:10px 0}.g9-room-code b{font-size:25px;letter-spacing:.18em;color:#fff}.g9-room-code small,.g9-online-status{font-size:11px;color:#b9c8ef}.g9-online-status{margin:8px 0}";
 document.head.appendChild(onlineCss);
   const gimmickCss=document.createElement("style");
   gimmickCss.textContent=".g9-gimmicks{display:grid;gap:7px;margin:10px 0}.g9-gimmicks>b{font-size:11px}.g9-gimmicks>div{display:flex;flex-wrap:wrap;gap:7px}.g9-gimmick{border:1px solid #91a6ed66;background:#1a2542;color:#eaf0ff;border-radius:9px;padding:8px 11px;font-size:11px;font-weight:800;cursor:pointer}.g9-gimmick.selected{background:#5268c7;border-color:#c3d0ff;box-shadow:0 0 0 2px #9aabff33}.g9-gimmick:disabled{opacity:.45;cursor:not-allowed}.g9-gimmicks small{font-size:10px;color:#aebbd8}";
@@ -350,6 +409,8 @@ document.head.appendChild(onlineCss);
     event.preventDefault();event.stopImmediatePropagation();
     if(kind==="start"||(kind==="new"&&session?.kind!=="online"))void start();
     else if(kind==="new"&&session?.kind==="online")void leave();
+    else if(kind==="random-match")void startRandomMatch().catch(e=>{errorText=e.message||String(e);busy=false;repaint();});
+    else if(kind==="random-cancel")cancelRandomMatch();
     else if(kind==="create-room")void createOnlineRoom().catch(e=>{errorText=e.message||String(e);busy=false;repaint();});
     else if(kind==="join-room")void joinOnlineRoom().catch(e=>{errorText=e.message||String(e);busy=false;repaint();});
     else if(kind==="leave")void leave();
