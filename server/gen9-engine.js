@@ -21,6 +21,13 @@ const NATURES_JA_TO_EN = {
   "おとなしい":"Gentle", "きまぐれ":"Quirky", "まじめ":"Serious",
   "てれや":"Bashful", "すなお":"Docile", "がんばりや":"Hardy"
 };
+const TERA_TYPES_JA_TO_EN = {
+  "ノーマル":"Normal", "ほのお":"Fire", "みず":"Water", "でんき":"Electric",
+  "くさ":"Grass", "こおり":"Ice", "かくとう":"Fighting", "どく":"Poison",
+  "じめん":"Ground", "ひこう":"Flying", "エスパー":"Psychic", "むし":"Bug",
+  "いわ":"Rock", "ゴースト":"Ghost", "ドラゴン":"Dragon", "あく":"Dark",
+  "はがね":"Steel", "フェアリー":"Fairy", "ステラ":"Stellar"
+};
 const JP_ITEM_ALIASES = {
   "こだわりハチマキ":"choiceband", "こだわりメガネ":"choicespecs",
   "こだわりスカーフ":"choicescarf", "いのちのたま":"lifeorb",
@@ -144,7 +151,8 @@ function normalizePokemon(raw, index) {
     "Flying","Psychic","Bug","Rock","Ghost","Dragon","Dark","Steel","Fairy","Stellar"
   ];
   const hasRequestedTera = raw.teraType != null && String(raw.teraType).trim() !== "";
-  const teraInput = hasRequestedTera ? String(raw.teraType).trim() : (species.types?.[0] || "Normal");
+  const teraInputRaw = hasRequestedTera ? String(raw.teraType).trim() : (species.types?.[0] || "Normal");
+  const teraInput = TERA_TYPES_JA_TO_EN[teraInputRaw] || teraInputRaw;
   const teraType = allowedTera.find(type => type.toLowerCase() === teraInput.toLowerCase());
   if (hasRequestedTera && !teraType) {
     throw new Error(species.name + " のテラスタイプ「" + teraInput + "」が不正です。");
