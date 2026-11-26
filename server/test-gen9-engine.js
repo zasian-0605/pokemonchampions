@@ -69,7 +69,6 @@ async function main() {
     terastallize: true,
     targetSpeciesId: "chansey"
   });
-  console.log("TERA_AUDIT_DIAGNOSTIC", JSON.stringify(teraAudit));
   assert.equal(teraAudit.moveWasUsed, true, "audit case should execute the selected move");
   assert.equal(teraAudit.teraApplied, true, "audit case should actually Terastallize");
   assert.equal(teraAudit.actualTeraType, "Fire");
