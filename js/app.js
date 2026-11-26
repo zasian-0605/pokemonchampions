@@ -106,7 +106,9 @@ function integrateUpstreamBattleData(data){
    for(const [flag,enabled] of Object.entries(source.flags))if(enabled)flags[flag]=true;
    move.flags=flags;
   }
-  move.showdownId=source.id||ids[0]||'';
+  // Supplemental API records keep the canonical Showdown ID in sourceId.
+  // Prefer it over the local API alias (for example api-416).
+  move.showdownId=source.sourceId||source.id||ids[0]||'';
   move.showdownShortDesc=source.shortDesc||'';
   move.showdownDesc=source.desc||'';
   move.showdownCallbackPaths=Array.isArray(source.callbackPaths)?source.callbackPaths.slice():[];
