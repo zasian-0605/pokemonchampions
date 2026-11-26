@@ -55,7 +55,53 @@ async function main() {
   assert.equal(service.destroy(first.battleId), true);
   assert.equal(service.destroy(first.battleId), false);
 
-  console.log("Generation 9 Showdown integration smoke test passed.");
+  const online = await service.createBattle({
+    kind: "online",
+    player1Name: "Player A",
+    player2Name: "Player B",
+    playerTeam: [{
+      name: "Iron Moth A",
+      species: "ironmoth",
+      level: 50,
+      abilityId: "quarkdrive",
+      heldItem: "boosterenergy",
+      nature: "ひかえめ",
+      moves: ["fierydance", "sludgewave", "energyball", "uturn"]
+    }],
+    opponentTeam: [{
+      name: "Iron Moth B",
+      species: "ironmoth",
+      level: 50,
+      abilityId: "quarkdrive",
+      heldItem: "boosterenergy",
+      nature: "ひかえめ",
+      moves: ["fierydance", "sludgewave", "energyball", "uturn"]
+    }]
+  });
+  const onlineSession = service.get(online.battleId, online.token, "p1");
+  const p2 = service.snapshot(onlineSession, "p2", 0);
+  assert.ok(p2.token);
+  assert.notEqual(online.token, p2.token, "each online player must have a different session token");
+  assert.ok(online.request?.active?.[0]?.moves?.length);
+  assert.ok(p2.request?.active?.[0]?.moves?.length);
+
+  service.validateAction(online.battleId, online.token, "p1", { moveIndex:0 });
+  service.validateAction(online.battleId, p2.token, "p2", { moveIndex:0 });
+  const onlineNext = await service.submitOnlineTurn(
+    online.battleId,
+    online.token,
+    p2.token,
+    { p1:{ moveIndex:0 }, p2:{ moveIndex:0 } },
+    online.logCursor || 0,
+    p2.logCursor || 0
+  );
+  assert.ok(onlineNext.p1.request || onlineNext.p1.done);
+  assert.ok(onlineNext.p2.request || onlineNext.p2.done);
+  assert.equal(onlineNext.p1.token, online.token);
+  assert.equal(onlineNext.p2.token, p2.token);
+  assert.equal(service.destroy(online.battleId), true);
+
+  console.log("Generation 9 Showdown CPU and online integration smoke tests passed.");
 }
 
 main().catch(error => {
