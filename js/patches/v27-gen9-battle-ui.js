@@ -1,4 +1,4 @@
-/* v27: Generation 9 battles run on the server-side Pokémon Showdown simulator. */
+/* v28: National Dex battles on the server-side Pokémon Showdown simulator. */
 (() => {
   "use strict";
   const W=window, APP=()=>W.PokemonChampions2D, S=()=>APP()?.state, API="/api/gen9";
@@ -85,7 +85,8 @@
   function renderOnlinePanel(){
     const code=onlineRoomCode ? '<div class="g9-room-code"><small>ルームコード</small><b>'+esc(onlineRoomCode)+'</b></div>' : "";
     const status=onlineStatus ? '<p class="g9-online-status">'+esc(onlineStatus)+'</p>' : "";
-    return '<section class="g9-card g9-online"><h2>オンライン対戦（全世代）</h2><p>ルームコードを共有して、別のプレイヤーと全国図鑑ルールのシングル対戦をします。両方のプレイヤーが行動を選ぶとターンが進みます。</p>'+status+code+'<div class="g9-online-row"><button class="g9-primary" data-g9="create-room" '+(busy?"disabled":"")+">ルームを作成</button></div><div class="g9-online-row"><input id="g9-room-code" maxlength="6" placeholder="6文字のルームコード" value=""><button class="g9-secondary" data-g9="join-room" '+(busy?"disabled":"")+">ルームに参加</button></div></section>';
+    const disabled=busy ? "disabled" : "";
+    return `<section class="g9-card g9-online"><h2>オンライン対戦（全世代）</h2><p>ルームコードを共有して、別のプレイヤーと全国図鑑ルールのシングル対戦をします。両方のプレイヤーが行動を選ぶとターンが進みます。</p>${status}${code}<div class="g9-online-row"><button class="g9-primary" data-g9="create-room" ${disabled}>ルームを作成</button></div><div class="g9-online-row"><input id="g9-room-code" maxlength="6" placeholder="6文字のルームコード" value=""><button class="g9-secondary" data-g9="join-room" ${disabled}>ルームに参加</button></div></section>`;
   }
   function render(){
     if(!session){
@@ -103,11 +104,13 @@
     }).join("");
     const gimmickOptions=[];
     if(active.canMegaEvo)gimmickOptions.push(["mega","メガシンカ"]);
-    if(active.canMegaEvoX)gimmickOptions.push(["megax","メガシンカ X"]);
-    if(active.canMegaEvoY)gimmickOptions.push(["megay","メガシンカ Y"]);
     if(active.canTerastallize)gimmickOptions.push(["terastallize","テラスタル"]);
-    const gimmickButtons=gimmickOptions.map(([mode,label])=>'<button type="button" class="g9-gimmick '+(gimmick===mode?"selected":"")+'" data-g9="gimmick" data-mode="'+mode+'" '+(busy||waitingForOpponent?"disabled":"")+">'+label+"</button>").join("");
-    const gimmickPanel=gimmickButtons?'<div class="g9-gimmicks"><b>このターンのバトルギミック</b><div>'+gimmickButtons+'</div><small>1ターンに選べるギミックは1つです。選択を解除すると通常の技になります。</small></div>':"";
+    const gimmickButtons=gimmickOptions.map(([mode,label])=>{
+      const selected=gimmick===mode ? "selected" : "";
+      const disabled=(busy||waitingForOpponent) ? "disabled" : "";
+      return '<button type="button" class="g9-gimmick '+selected+'" data-g9="gimmick" data-mode="'+mode+'" '+disabled+'>'+label+'</button>';
+    }).join("");
+    const gimmickPanel=gimmickButtons ? '<div class="g9-gimmicks"><b>このターンのバトルギミック</b><div>'+gimmickButtons+'</div><small>1ターンに選べるギミックは1つです。選択を解除すると通常の技になります。</small></div>' : "";
     const logs=(session.logs||[]).map(logText).filter(Boolean).slice(-32).map(x=>"<p>"+esc(x)+"</p>").join("");
     let result="対戦終了";
     if(session.winner==="tie")result="引き分け";
