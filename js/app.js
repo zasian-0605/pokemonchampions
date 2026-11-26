@@ -42,7 +42,7 @@ const TYPE_CHART = {
 };
 const STATUS_JA = {par:'まひ',brn:'やけど',slp:'ねむり',frz:'こおり',psn:'どく',tox:'もうどく'};
 const WEATHER_JA = {rain:'あめ',sun:'はれ',sand:'すなあらし',snow:'ゆき'};
-const DATA_NOTE = '図鑑・技・特性・タイプ・習得技はHTML内蔵データを使用します。インターネットを使用するのは画像の表示だけです。';
+const DATA_NOTE = '図鑑・日本語名・習得技は内蔵データ、技の対戦用数値・追加効果と特性の説明メタ情報はPokémon Showdownの取得データを優先します。';
 const DEFAULT_ADMIN_CONFIG = {shinyChance:1,markChance:5,eggShinyChance:50,eggMarkChance:50,raidShinyChance:20,raidMarkChance:20,rarityCommon:65,rarityUncommon:25,rarityRare:8,raritySuperrare:1.8,rarityLegendary:0.2};
 function cleanAdminConfig(raw={}){const out={};for(const [k,v] of Object.entries(DEFAULT_ADMIN_CONFIG)){const n=Number(raw?.[k]??v);out[k]=Number.isFinite(n)?Math.max(0,Math.min(100,n)):v;}return out;}
 const state = {
@@ -1133,7 +1133,7 @@ async function handleAction(action,el){const b=state.battle;
  case 'switch-to':{
   if(!b||b.result||b.turnBusy)break;const idx=Number(el.dataset.index),slot=Number(el.dataset.slot??state.selectedActiveSlot);if(!b.playerTeam[idx]||b.playerTeam[idx].fainted||b.playerActive.includes(idx)){toast('そのポケモンには交代できません。','warn');break;}$('#modal-root').innerHTML='';const current=b.playerTeam[b.playerActive[slot]];const action={actorUid:current.uid,moveId:null,targetUid:null,slot,switchTo:idx};if(b.mode==='doubles'){b.pending=b.pending||{};b.pending[slot]=action;state.selectedActiveSlot=b.playerActive.findIndex((x,i)=>!b.playerTeam[x]?.fainted&&!b.pending[i]&&i!==slot);if(state.selectedActiveSlot<0)state.selectedActiveSlot=0;toast('交代を決定しました。残りの味方の行動も選んでください。');renderPage();}else await executeTurn([action]);break;}
  case 'toggle-mega':{if(!b||b.result||b.turnBusy)break;const slot=state.selectedActiveSlot,mon=b.playerTeam[b.playerActive[slot]];if(!mon||mon.fainted)break;if(b.megaUsedBySide?.player){toast('このバトルでは、すでにメガシンカを使用しています。','warn');break;}if(b.megaPendingSlots?.includes(slot)){b.megaPendingSlots=b.megaPendingSlots.filter(x=>x!==slot);toast('メガシンカの選択を解除しました。');}else if(mon.megaUsed||!findMegaForm(mon)){toast('このポケモンには対応するメガシンカがありません。','warn');break;}else if(capItem('megaenergy')<1){toast('メガエナジーがありません。ショップで5000 VPで購入してください。','warn');break;}else{b.megaPendingSlots=b.megaPendingSlots||[];b.megaPendingSlots.push(slot);toast('メガシンカを選択しました。技を決定するとメガエナジーを1個消費して発動します。','good');}renderPage();break;}
- case 'reload-public-data':{await loadAllData();ensureOwnedMoveSets();updateTop();renderPage();toast('内蔵データを再読み込みしました。','good');break;}
+ case 'reload-public-data':{await loadAllData();ensureOwnedMoveSets();updateTop();renderPage();toast('ゲームデータとShowdown対戦データを再読み込みしました。','good');break;}
  case 'export-save':exportSave();break;
  case 'save-now':{if(state.saveWriteBlocked&&state.saveBlockReason==='write'){state.saveWriteBlocked=false;state.saveBlockReason=null;state.saveWarningShown=false;}const saved=saveLocal();toast(saved?'ブラウザ内のセーブデータを保存しました。':'ブラウザ内に保存できませんでした。セーブ状態を確認し、必要ならJSONでバックアップしてください。',saved?'good':'bad');renderPage();break;}
  case 'import-save':$('#import-save')?.click();break;
@@ -1233,7 +1233,7 @@ function initializeSave(){
 }
 async function boot(forceRefresh=false){
  try{
-  setLoad(3,'全国内蔵の図鑑・全技・習得技データを準備中…');
+  setLoad(3,'図鑑・習得技を読み込み、Pokémon Showdownの対戦データを接続中…');
   await loadAllData({forceRefresh});
   const catalogCount=Object.keys(state.data.movesById||{}).length;
   const learnCount=Object.keys(state.data.learnsets||{}).length;
@@ -1245,7 +1245,7 @@ async function boot(forceRefresh=false){
   }
   if(!state.data.dex.length)throw new Error('図鑑データが空です。HTMLファイルが破損していないか確認してください。');
   const dexCount=state.data.dex.length,moveCount=Object.keys(state.data.movesById||{}).length,learnCount2=Object.keys(state.data.learnsets||{}).length;
-  setLoad(100,`準備完了：図鑑 ${dexCount.toLocaleString()} 件・技 ${moveCount.toLocaleString()} 件・習得技 ${learnCount2.toLocaleString()} 種族`);
+  setLoad(100,`準備完了：図鑑 ${dexCount.toLocaleString()}件・Showdown技反映 ${Number(state.dataInfo?.showdownMoveCount||0).toLocaleString()}件・特性データ ${Number(state.dataInfo?.showdownAbilityMatched||0).toLocaleString()}件・習得技 ${learnCount2.toLocaleString()}種族`);
   $('#bootstart').disabled=false;
   $('#bootstart').textContent=['full','full-csv'].includes(state.dataState)?'ゲームを起動':'データを確認して起動';
   const retry=$('#retry-data');if(retry)retry.classList.toggle('hidden',['full','full-csv'].includes(state.dataState));
