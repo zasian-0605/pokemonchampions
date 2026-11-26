@@ -1,6 +1,6 @@
 /* Direct retrieval test: move/ability reference data from Pokémon Showdown.
  * The embedded Pokédex, move catalogue, learnsets, Japanese text, and battle
- * formulas remain untouched. Remote records are attached as reference metadata.
+ * formulas remain untouched. Remote records are stored separately as reference metadata.
  */
 (() => {
   "use strict";
@@ -100,7 +100,7 @@
       window.exports = window;
       script.async = true;
       script.crossOrigin = "anonymous";
-      script.src = SHOWDOWN_ABILITIES_URL;
+      script.src = SHOWDOWN_ABILITIES_URL + '?cacheBust=' + Date.now();
       script.onload = () => {
         const abilities = window.BattleAbilities;
         if (!abilities || typeof abilities !== "object" || Array.isArray(abilities)) {
