@@ -86,6 +86,13 @@ async function main() {
     "unknown Tera types must be rejected"
   );
 
+  const japaneseTeraTeam = service.validateTeam([{
+    species:"snorlax",
+    moves:["body-slam"],
+    teraType:"ほのお"
+  }]);
+  assert.equal(japaneseTeraTeam[0].teraType, "Fire", "Japanese Tera type labels should normalize to Showdown type IDs");
+
   const first = await service.createBattle({
     playerName: "Gen9 Test",
     playerTeam: [{
