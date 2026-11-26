@@ -440,6 +440,6 @@ document.head.appendChild(onlineCss);
     }
     console.info("[v27] Showdown item catalog loaded:",catalog.items.length);
   }).catch(error=>console.warn("[v27] Showdown item catalog unavailable:",error));
-W.PokemonChampions2DGen9={version:"28.1.0",format:"gen9nationaldexag",engine:"pokemon-showdown",dex:"National Dex",mechanics:["Mega Evolution","Terastallization"],open,createOnlineRoom,joinOnlineRoom};
-console.info("[v28.1] National Dex battle UI bridge loaded; navigation buttons bound.");
+W.PokemonChampions2DGen9={version:"29.0.0",format:"gen9nationaldexag",engine:"pokemon-showdown",dex:"National Dex",mechanics:["Mega Evolution","Terastallization"],open,createOnlineRoom,joinOnlineRoom};
+console.info("[v29.0] National Dex battle UI bridge and matchmaking loaded.");
 })();
