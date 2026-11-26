@@ -55,6 +55,28 @@ Online PvP uses the existing `/ws` WebSocket endpoint with these messages:
 session tokens and side-specific choice requests; only public battle events
 are broadcast.
 
+## Exhaustive audit lab
+
+The `全通り自動検証ラボ` screen runs a memory-only test matrix using the
+server's Pokémon Showdown battle simulator. It covers every catalog species
+and move, each of the 20 Terastallization states (no Tera plus all 19 types),
+and every catalog held item plus no item. A separate test is also created for
+each ability listed on each species.
+
+- `GET /api/audit/health` — matrix dimensions and exact case count.
+- `POST /api/audit/jobs` — start a full matrix.
+- `GET /api/audit/jobs/latest` — current in-memory job status.
+- `POST /api/audit/jobs/:id/pause`, `resume`, or `cancel` — control the job.
+- `GET /api/audit/jobs/:id/export` — download a JSON summary and recent samples.
+
+No PostgreSQL database, audit password, or AI API key is required. Job progress
+and the latest 200 detailed result samples stay in server memory only; a server
+restart or redeploy clears them. JSON export contains counters and recent
+samples, not every raw battle log. The total matrix can be extremely large and
+may take a very long time to complete. A successful move-use log confirms that
+the move was executed in that Showdown test; it does not prove every
+condition-specific secondary effect or every possible battle context is correct.
+
 ## Format notes
 
 The battle client currently uses `gen9customgame`: Generation 9 mechanics
