@@ -6,7 +6,9 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { WebSocketServer, WebSocket } = require("ws");
 const { Gen9BattleService, FORMAT_ID } = require("./gen9-engine");
+const { AutoAuditLab } = require("./auto-audit");
 const gen9Service = new Gen9BattleService();
+const autoAuditLab = new AutoAuditLab({ battleService: gen9Service });
 
 function sendJson(res, status, value) {
   const body = JSON.stringify(value);
@@ -504,6 +506,10 @@ function handleMessage(socket, payload) {
 
 const server = http.createServer((req,res) => {
   const requestUrl = new URL(req.url || "/", "http://localhost");
+  if (requestUrl.pathname.startsWith("/api/audit/")) {
+    void autoAuditLab.handle(req, res, requestUrl);
+    return;
+  }
   if (requestUrl.pathname.startsWith("/api/gen9/")) {
     void handleGen9Api(req, res, requestUrl);
     return;
@@ -610,6 +616,9 @@ cleanup.unref();
 
 server.listen(PORT,HOST,() => {
   console.log("[pokemon-champions-online] listening on " + HOST + ":" + PORT);
+  void autoAuditLab.init().catch(error => {
+    console.error("[audit-lab] database initialization failed:", error?.message || error);
+  });
 });
 function shutdown() {
   clearInterval(cleanup);
