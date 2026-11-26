@@ -3,7 +3,7 @@
 const crypto = require("node:crypto");
 const Sim = require("pokemon-showdown");
 
-const FORMAT_ID = "gen9customgame";
+const FORMAT_ID = "gen9nationaldexag";
 const MAX_SESSIONS = 200;
 const SESSION_TTL_MS = 30 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 15000;
@@ -54,8 +54,8 @@ function normalizePokemon(raw, index) {
 
   const speciesInput = raw.species || raw.speciesId || raw.formId || raw.name;
   const species = resolveEntry(Sim.Dex.species, speciesInput);
-  if (!species || species.isNonstandard === "Unobtainable") {
-    throw new Error("「" + String(speciesInput || "不明") + "」は第9世代Showdown図鑑に存在しません。");
+  if (!species) {
+    throw new Error("「" + String(speciesInput || "不明") + "」はShowdownの全国図鑑に存在しません。");
   }
 
   const rawMoves = Array.isArray(raw.moves) ? raw.moves : [];
@@ -121,7 +121,7 @@ function normalizeTeam(input) {
   }
   const team = input.map(normalizePokemon);
   const errors = new Sim.TeamValidator(FORMAT_ID).validateTeam(team);
-  if (errors?.length) throw new Error(errors.join("\n"));
+  if (errors?.length) throw new Error("全国図鑑ルールで使えない設定があります:\n" + errors.join("\n"));
   return team;
 }
 function makeCatalog() {
@@ -147,6 +147,9 @@ function makeCatalog() {
     source: "pokemon-showdown",
     format: FORMAT_ID,
     generation: 9,
+    generationRange: "1-9",
+    dex: "National Dex",
+    mechanics: { megaEvolution: true, dynamax: false, terastallization: true },
     counts: { moves: moves.length, abilities: abilities.length, items: items.length, species: species.length },
     moves, abilities, items, species
   };
@@ -377,7 +380,24 @@ class Gen9BattleService {
       throw new Error("技の選択が不正です。");
     }
     if (moves[moveIndex].disabled) throw new Error("その技は現在使用できません。");
-    return "move " + (moveIndex + 1) + (action?.terastallize && active?.canTerastallize ? " terastallize" : "");
+    const gimmick = String(action?.gimmick || (action?.terastallize ? "terastallize" : action?.mega ? "mega" : ""));
+    let gimmickCommand = "";
+    if (gimmick === "mega") {
+      if (!active?.canMegaEvo) throw new Error("このポケモンはメガシンカできません。対応するメガストーンを確認してください。");
+      gimmickCommand = " mega";
+    } else if (gimmick === "megax") {
+      if (!active?.canMegaEvoX) throw new Error("このポケモンはメガリザードンXにメガシンカできません。");
+      gimmickCommand = " megax";
+    } else if (gimmick === "megay") {
+      if (!active?.canMegaEvoY) throw new Error("このポケモンはメガリザードンYにメガシンカできません。");
+      gimmickCommand = " megay";
+    } else if (gimmick === "terastallize") {
+      if (!active?.canTerastallize) throw new Error("このポケモンはテラスタルできません。");
+      gimmickCommand = " terastallize";
+    } else if (gimmick) {
+      throw new Error("選択したバトルギミックが不正です。");
+    }
+    return "move " + (moveIndex + 1) + gimmickCommand;
   }
 
   chooseCpuAction(request) {
@@ -396,8 +416,13 @@ class Gen9BattleService {
     candidates.sort((a, b) => b.power - a.power);
     const shortlist = candidates.slice(0, Math.min(3, candidates.length));
     const picked = shortlist[crypto.randomInt(0, shortlist.length)];
-    return "move " + (picked.index + 1) +
-      (request.active?.[0]?.canTerastallize && Math.random() < 0.35 ? " terastallize" : "");
+    const active = request.active?.[0] || {};
+    let gimmick = "";
+    if (active.canMegaEvo && Math.random() < 0.25) gimmick = " mega";
+    else if (active.canMegaEvoX && Math.random() < 0.25) gimmick = " megax";
+    else if (active.canMegaEvoY && Math.random() < 0.25) gimmick = " megay";
+    else if (active.canTerastallize && Math.random() < 0.35) gimmick = " terastallize";
+    return "move " + (picked.index + 1) + gimmick;
   }
 
   async submitCpuAction(id, token, action, from = 0) {
