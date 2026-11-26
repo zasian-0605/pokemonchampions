@@ -6,6 +6,13 @@ const { Gen9BattleService, FORMAT_ID } = require("./gen9-engine");
 async function main() {
   const service = new Gen9BattleService();
   const catalog = service.catalog();
+  assert.equal(catalog.schemaVersion, 1);
+  assert.equal(catalog.sourceVersion, "pokemon-showdown@0.11.11");
+  assert.equal(catalog.format, FORMAT_ID);
+  assert.equal(catalog.counts.moves, catalog.moves.length);
+  assert.equal(catalog.counts.abilities, catalog.abilities.length);
+  assert.equal(catalog.counts.items, catalog.items.length);
+  assert.equal(catalog.counts.species, catalog.species.length);
   assert.ok(catalog.moves.length > 500);
   assert.ok(catalog.abilities.some(item => item.id === "quarkdrive"));
   assert.ok(catalog.items.some(item => item.id === "boosterenergy"));

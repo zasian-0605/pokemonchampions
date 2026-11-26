@@ -1,28 +1,28 @@
-# Pokémon Champions 2D — Online Room Server
+# Server
 
-This folder contains the WebSocket room relay and a small static-file host for the existing game.
+This folder contains the live HTTP/WebSocket server and the Generation 9
+Showdown battle service.
 
-## Deploy on Render
+There is no separate npm project in this folder. Install dependencies and
+start the server from the repository root:
 
-The repository root contains `render.yaml`. Create a Blueprint deployment from this repository and choose the Render workspace you intend to use. The service is named `pokemonchampions-online`.
+```sh
+npm install
+npm start
+npm test
+```
 
-- Runtime: Node.js
-- Build command: `npm --prefix server install`
-- Start command: `npm --prefix server start`
-- Health check: `/health`
-- WebSocket endpoint: `wss://YOUR-SERVICE.onrender.com/ws`
+Render uses the root `render.yaml` and root `package.json`.
 
-The service also serves the game at its root URL. Open the service URL directly to use the game and its online feature on the same origin. If the game is hosted separately, paste the WebSocket URL into the Online page's server URL field.
+## Main files
 
-## Room protocol
+- `index.js` — HTTP routes, static file hosting, WebSocket rooms, and API
+  error handling.
+- `gen9-engine.js` — server-authoritative battle sessions using the pinned
+  `pokemon-showdown` package.
+- `auto-audit.js` — in-memory test matrix runner.
+- `test-gen9-engine.js` — CPU battle, online battle, Tera, and catalogue
+  smoke tests.
 
-- The room creator hosts the turn simulation in their browser.
-- The server creates a six-character room code and relays both players' team data and actions.
-- The host resolves a turn with the existing game engine and sends the updated state to the opponent.
-- Rooms are held in memory and expire after 20 minutes without activity.
-
-This is a casual, room-code prototype, not a ranked or anti-cheat service. The host browser is authoritative, so a modified host client could cheat. If the host closes the tab or loses connection, the room ends. The server does not store player accounts or saved teams.
-
-## Pokémon Showdown data
-
-The browser retrieves Showdown moves, abilities, and items data for reference metadata. Functions in Showdown's simulator data files are not executed as arbitrary browser code. Only mechanics implemented in this fan game's battle engine are applied; loading an item or ability's description does not guarantee every special effect is reproduced.
+The committed `../data/showdown-catalog.json` file is catalogue data for
+screens and audit planning. It does not replace the Showdown simulator code.

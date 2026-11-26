@@ -30,18 +30,38 @@ async function readBody(req, maxBytes) {
   return new Promise((resolve, reject) => {
     let body = "";
     let size = 0;
+    let tooLarge = false;
+    let settled = false;
+    const fail = error => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
     req.on("data", chunk => {
       size += chunk.length;
       if (size > (maxBytes || 64 * 1024)) {
-        reject(new Error("リクエストが大きすぎます。"));
-        req.destroy();
-      } else body += chunk.toString("utf8");
+        tooLarge = true;
+        body = "";
+        return;
+      }
+      if (!tooLarge) body += chunk.toString("utf8");
     });
     req.on("end", () => {
-      try { resolve(body ? JSON.parse(body) : {}); }
-      catch (_) { reject(new Error("JSON形式が正しくありません。")); }
+      if (tooLarge) {
+        fail(new Error("リクエストが大きすぎます。"));
+        return;
+      }
+      try {
+        const parsed = body ? JSON.parse(body) : {};
+        if (settled) return;
+        settled = true;
+        resolve(parsed);
+      } catch (_) {
+        fail(new Error("JSON形式が正しくありません。"));
+      }
     });
-    req.on("error", reject);
+    req.on("error", fail);
+    req.on("aborted", () => fail(new Error("リクエストが途中で中断されました。")));
   });
 }
 

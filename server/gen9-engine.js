@@ -1,7 +1,10 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const fs = require("node:fs");
+const path = require("node:path");
 const Sim = require("pokemon-showdown");
+const rootPackage = require("../package.json");
 
 const FORMAT_ID = "gen9nationaldexag";
 const MAX_SESSIONS = 200;
@@ -158,13 +161,41 @@ function makeCatalog() {
 }
 let cachedCatalog = null;
 
+function loadCatalogSnapshot() {
+  const filename = path.join(__dirname, "..", "data", "showdown-catalog.json");
+  try {
+    const snapshot = JSON.parse(fs.readFileSync(filename, "utf8"));
+    const expectedSourceVersion = "pokemon-showdown@" +
+      rootPackage.dependencies?.["pokemon-showdown"];
+    if (snapshot.schemaVersion !== 1 ||
+        snapshot.format !== FORMAT_ID ||
+        snapshot.sourceVersion !== expectedSourceVersion) {
+      throw new Error("保存済みカタログの形式・Showdownバージョンが一致しません。");
+    }
+    for (const key of ["moves", "abilities", "items", "species"]) {
+      if (!Array.isArray(snapshot[key]) ||
+          snapshot.counts?.[key] !== snapshot[key].length) {
+        throw new Error("保存済みカタログの件数が一致しません: " + key);
+      }
+    }
+    console.log("[showdown-catalog] committed snapshot loaded:", snapshot.counts);
+    return snapshot;
+  } catch (error) {
+    console.warn(
+      "[showdown-catalog] snapshot unavailable; rebuilding from installed Dex:",
+      error?.message || error
+    );
+    return makeCatalog();
+  }
+}
+
 class Gen9BattleService {
   constructor() {
     this.sessions = new Map();
   }
 
   catalog() {
-    if (!cachedCatalog) cachedCatalog = makeCatalog();
+    if (!cachedCatalog) cachedCatalog = loadCatalogSnapshot();
     return cachedCatalog;
   }
 
@@ -606,4 +637,4 @@ class Gen9BattleService {
   }
 }
 
-module.exports = { Gen9BattleService, FORMAT_ID };
+module.exports = { Gen9BattleService, FORMAT_ID, makeCatalog };

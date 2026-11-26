@@ -507,7 +507,14 @@ function handleMessage(socket, payload) {
 const server = http.createServer((req,res) => {
   const requestUrl = new URL(req.url || "/", "http://localhost");
   if (requestUrl.pathname.startsWith("/api/audit/")) {
-    void autoAuditLab.handle(req, res, requestUrl);
+    void autoAuditLab.handle(req, res, requestUrl).catch(error => {
+      console.error("[audit-lab] API request failed:", error?.stack || error);
+      if (!res.headersSent && !res.destroyed) {
+        sendJson(res, 500, { error: "自動検証APIで内部エラーが発生しました。" });
+      } else if (!res.writableEnded && !res.destroyed) {
+        res.end();
+      }
+    });
     return;
   }
   if (requestUrl.pathname.startsWith("/api/gen9/")) {
@@ -617,7 +624,7 @@ cleanup.unref();
 server.listen(PORT,HOST,() => {
   console.log("[pokemon-champions-online] listening on " + HOST + ":" + PORT);
   void autoAuditLab.init().catch(error => {
-    console.error("[audit-lab] database initialization failed:", error?.message || error);
+    console.error("[audit-lab] initialization failed:", error?.message || error);
   });
 });
 function shutdown() {

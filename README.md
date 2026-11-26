@@ -1,28 +1,39 @@
-# Pokémon Champions 2D — Generation 9 battle engine
+# Pokémon Champions 2D
 
-The browser game keeps its existing box, collection, and training systems. A
-separate Generation 9 battle screen is powered by the official Pokémon
-Showdown simulator package on the server.
+A browser-based Pokémon collection game with a separate server-authoritative
+Generation 9 battle mode.
 
-## Battle architecture
+## Project layout
 
-- `server/gen9-engine.js` — server-authoritative Showdown BattleStream,
-  Generation 9 Custom Game team validation, team conversion, CPU actions,
-  request handling, and battle snapshots.
-- `server/index.js` — HTTP CPU-battle API and WebSocket room service for
-  server-authoritative player-vs-player battles. Per-player tokens keep each
-  side's private request data separate.
-- `js/patches/v27-gen9-battle-ui.js` — Generation 9 battle screen for CPU
-  matches and room-code online matches. It sends choices only; the server
-  calculates outcomes and returns public battle logs plus that player's own
-  choice request.
-- `js/offline-data.js` and `js/app.js` — existing Japanese display data,
-  save data, collection, and box systems.
+- `index.html`, `css/`, `js/` — browser interface and the existing
+  collection, box, training, and legacy prototype systems.
+- `js/offline-data.js` — the main built-in Pokédex and Japanese game data.
+- `js/upstream-mechanics.js` — supplemental reference metadata used by the
+  older browser-side prototype. It does not contain executable Showdown
+  battle callbacks.
+- `data/showdown-catalog.json` — committed, versioned catalogue snapshot
+  containing Showdown species, move, ability, and item records.
+- `server/gen9-engine.js` — server-authoritative Showdown BattleStream.
+  The snapshot is used for catalogue/UI data; the installed Showdown package
+  executes the actual battle mechanics.
+- `server/index.js` — the single HTTP and WebSocket server entry point.
+- `server/auto-audit.js` — memory-only audit job runner.
+- `scripts/export-showdown-catalog.js` — rebuilds the committed catalogue
+  from the exact Showdown package version pinned in the root manifest.
 
-The Showdown simulator is the source of truth for turn order, move behavior,
-damage, accuracy, critical hits, abilities, held items, status conditions,
-weather, terrain, switching, residual effects, and Terastallization. The
-client no longer calculates those outcomes for the Generation 9 screen.
+The root `package.json` is the only dependency manifest used by Render and
+GitHub Actions. There is no separate server npm project.
+
+## Battle rules
+
+The current server battle format is `gen9nationaldexag`: Generation 9
+mechanics with National Dex AG rules. Species from earlier generations can
+appear when supported by the format. Mega Evolution and Terastallization are
+enabled; Dynamax is disabled. Showdown's `TeamValidator` checks player teams.
+
+The Generation 9 screen is separate from the older browser-side prototype
+battle and raid modes. Those legacy modes still use their own existing client
+logic and have not been migrated to Showdown.
 
 ## Run locally
 
@@ -33,65 +44,52 @@ npm install
 npm start
 ```
 
-Open `http://localhost:10000`. The Render service can use the same root
-`npm install` / `npm start` commands. Alternatively, for an isolated server
-install, run `npm --prefix server install` followed by
-`npm --prefix server start`.
+Open `http://localhost:10000`.
 
-## Generation 9 API
+Run the simulator smoke tests:
 
-- `GET /api/gen9/health` — simulator health.
-- `GET /api/gen9/catalog` — Showdown move, ability, item, and species data.
-- `POST /api/gen9/battles` — create a Generation 9 CPU battle. Body:
-  `{ "playerTeam": [...], "playerName": "Trainer" }`.
-- `POST /api/gen9/battles/:id/action` — submit a move or switch. Body:
-  `{ "token": "...", "action": { "moveIndex": 0 } }`.
-- `GET /api/gen9/battles/:id?token=...` — read the current player snapshot.
-- `DELETE /api/gen9/battles/:id?token=...` — release a CPU battle session.
+```sh
+npm test
+```
 
-Online PvP uses the existing `/ws` WebSocket endpoint with these messages:
-`create-gen9-room`, `join-gen9-room`, `gen9-action`,
-`leave-gen9-room`, and `gen9-forfeit`. Both players receive independent
-session tokens and side-specific choice requests; only public battle events
-are broadcast.
+Regenerate the saved catalogue after changing the pinned Showdown version:
 
-## Exhaustive audit lab
+```sh
+npm run data:export
+```
 
-The `全通り自動検証ラボ` screen runs a memory-only test matrix using the
-server's Pokémon Showdown battle simulator. It covers every catalog species
-and move, each of the 20 Terastallization states (no Tera plus all 19 types),
-and every catalog held item plus no item. A separate test is also created for
-each ability listed on each species.
+The `Refresh Showdown catalogue` GitHub Actions workflow also regenerates the
+snapshot and commits it together with `package-lock.json`.
 
-- `GET /api/audit/health` — matrix dimensions and exact case count.
-- `POST /api/audit/jobs` — start a full matrix.
-- `GET /api/audit/jobs/latest` — current in-memory job status.
-- `POST /api/audit/jobs/:id/pause`, `resume`, or `cancel` — control the job.
-- `GET /api/audit/jobs/:id/export` — download a JSON summary and recent samples.
+## API
 
-No PostgreSQL database, audit password, or AI API key is required. Job progress
-and the latest 200 detailed result samples stay in server memory only; a server
-restart or redeploy clears them. JSON export contains counters and recent
-samples, not every raw battle log. The total matrix can be extremely large and
-may take a very long time to complete. A successful move-use log confirms that
-the move was executed in that Showdown test; it does not prove every
-condition-specific secondary effect or every possible battle context is correct.
+- `GET /health` — service health check.
+- `GET /api/gen9/health` — battle-engine health and active format.
+- `GET /api/gen9/catalog` — committed Showdown catalogue snapshot.
+- `POST /api/gen9/battles` — create a CPU battle.
+- `POST /api/gen9/battles/:id/action` — submit a CPU-battle action.
+- `GET /api/gen9/battles/:id?token=...` — read a battle snapshot.
+- `/ws` — room-code online PvP using the same Showdown battle service.
+- `GET /api/audit/health` — audit scope and case count.
+- `POST /api/audit/jobs` — start the audit job.
+- `GET /api/audit/jobs/latest` — read the latest in-memory job.
 
-## Format notes
+## Audit limitations
 
-The battle client currently uses `gen9customgame`: Generation 9 mechanics
-with no tournament banlist. Player teams are checked by Showdown's
-`TeamValidator`. CPU teams are generated by Showdown's
-`gen9randombattle` team generator and played in the same battle engine.
-Unsupported species, items, abilities, or moves are rejected by validation.
+The audit job checks a large species × move × Tera × item matrix and a
+separate case for each species ability. The ability-only cases use one selected
+test move; this is not every ability × every move × every item × every Tera
+combination. A “verified” result means the selected move appeared in the
+Showdown battle log (and the requested Tera action occurred where applicable).
+It does not independently prove every secondary effect or all battle contexts.
 
-The Generation 9 screen is separate from the prototype's older battle and raid
-modes. Those older modes remain available as legacy modes and have not been
-converted to the Showdown simulator. The new Generation 9 screen supports
-server-authoritative CPU and room-code player-vs-player battles.
+The current audit runner stores its job and at most 200 recent samples in
+server memory. Restarting or redeploying the service clears the job. The audit
+matrix is intentionally large and should not be treated as a quick health
+check.
 
-## License
+## License and attribution
 
-See `SHOWDOWN-NOTICE.md` for the Pokémon Showdown MIT license notice.
-This fan project is unofficial and is not affiliated with Nintendo, The
-Pokémon Company, or Game Freak.
+See `SHOWDOWN-NOTICE.md` for the Pokémon Showdown MIT license notice. This is
+an unofficial fan project and is not affiliated with Nintendo, The Pokémon
+Company, or Game Freak.

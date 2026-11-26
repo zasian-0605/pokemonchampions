@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   gen9-showdown-smoke-test:
     runs-on: ubuntu-latest
@@ -13,7 +16,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22.18.0"
-      - name: Install battle simulator
-        run: npm install --prefix server
+      - name: Install root dependencies
+        run: npm install
+      - name: Check server and data exporter syntax
+        run: |
+          node --check server/index.js
+          node --check server/gen9-engine.js
+          node --check server/auto-audit.js
+          node --check scripts/export-showdown-catalog.js
+          node --check js/upstream-loader.js
+      - name: Rebuild and validate committed catalogue
+        run: npm run data:export
       - name: Run Generation 9 simulator smoke test
-        run: npm test --prefix server
+        run: npm test
