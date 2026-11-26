@@ -171,6 +171,7 @@ class AutoAuditLab {
     await this.pool.query("CREATE INDEX IF NOT EXISTS auto_audit_cases_queue_idx ON auto_audit_cases(job_id, status, id)");
     await this.pool.query("CREATE INDEX IF NOT EXISTS auto_audit_cases_ai_idx ON auto_audit_cases(job_id, ai_status, id)");
     await this.pool.query("UPDATE auto_audit_cases SET status='pending', updated_at=now() WHERE status='running'");
+    await this.pool.query("UPDATE auto_audit_cases SET ai_status='pending', updated_at=now() WHERE ai_status='reviewing'");
     await this.pool.query("UPDATE auto_audit_jobs SET status='running', updated_at=now() WHERE status='running'");
     this.ready = true;
     this.startWorker();
@@ -209,7 +210,7 @@ class AutoAuditLab {
       await client.query(
         "INSERT INTO auto_audit_cases(job_id,case_key,kind,payload) " +
         "SELECT $1, item->>'case_key', item->>'kind', item->'payload' " +
-        "FROM jsonb_array_elements($2::jsonb) AS item",
+        "FROM jsonb_array_elements($2::jsonb) AS entries(item)",
         [id, JSON.stringify(cases)]
       );
       await client.query("COMMIT");
