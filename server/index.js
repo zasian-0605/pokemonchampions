@@ -40,6 +40,7 @@ function readJson(req, maxBytes = 1024 * 1024) {
   });
 }
 async function handleGen9Api(req, res, url) {
+  const requestId = crypto.randomUUID();
   try {
     if (req.method === "GET" && url.pathname === "/api/gen9/health") {
       return sendJson(res, 200, {
@@ -57,6 +58,7 @@ async function handleGen9Api(req, res, url) {
     }
     if (req.method === "POST" && url.pathname === "/api/gen9/battles") {
       const body = await readJson(req);
+      console.info("[gen9-api] CPU battle start", requestId, "teamSize=" + (Array.isArray(body.playerTeam) ? body.playerTeam.length : "invalid"));
       const snapshot = await gen9Service.createBattle({
         playerTeam:body.playerTeam,
         opponentTeam:body.opponentTeam,
@@ -89,7 +91,14 @@ async function handleGen9Api(req, res, url) {
     }
     return sendJson(res, 404, { error:"National Dex API endpoint not found." });
   } catch (error) {
-    return sendJson(res, 400, { error:error?.message || "National Dex API error." });
+    console.error("[gen9-api] request failed", requestId, req.method, url.pathname, error?.stack || error);
+    if (res.destroyed || res.writableEnded) return;
+    return sendJson(res, Number(error?.statusCode) || 400, {
+      ok:false,
+      code:"GEN9_API_REQUEST_FAILED",
+      requestId,
+      error:error?.message || "National Dex API error."
+    });
   }
 }
 
@@ -101,6 +110,7 @@ const MAX_TEAM_SIZE = 6;
 const MAX_MESSAGE_BYTES = 512 * 1024;
 const rooms = new Map();
 const gen9Rooms = new Map();
+const randomMatchQueue = [];
 const clients = new WeakMap();
 const MIME = {
   ".html":"text/html; charset=utf-8",".js":"text/javascript; charset=utf-8",
@@ -217,9 +227,21 @@ function makeRoomCode() {
   }
   throw new Error("ルームを作成できませんでした。もう一度試してください。");
 }
+function removeRandomQueueEntry(socket) {
+  const index = randomMatchQueue.findIndex(entry => entry.socket === socket);
+  if (index < 0) return false;
+  randomMatchQueue.splice(index, 1);
+  return true;
+}
 function detach(socket, reason) {
   const state = clients.get(socket);
   if (!state) return;
+  if (state.randomQueued) {
+    removeRandomQueueEntry(socket);
+    clients.set(socket,{});
+    send(socket,{type:"gen9-random-cancelled",reason:reason || "disconnect"});
+    return;
+  }
   if (state.gen9RoomCode) {
     const gameRoom = gen9Rooms.get(state.gen9RoomCode);
     clients.set(socket,{});
@@ -278,19 +300,9 @@ function assignGen9Client(socket, room, player) {
 function makeGen9Player(socket,name,team,side) {
   return {id:crypto.randomUUID(),side,name:safeString(name || "トレーナー",18) || "トレーナー",team,socket,token:null};
 }
-async function joinGen9Room(socket,payload) {
-  detach(socket,"replaced");
-  const code=safeString(payload.roomCode,6).toUpperCase();
-  const room=gen9Rooms.get(code);
-  if(!room||room.phase!=="waiting"||room.players.size!==1) {
-    send(socket,{type:"error",message:"その第9世代ルームは見つからないか、すでに満員です。"});
-    return;
-  }
-  const team=gen9Service.validateTeam(sanitizeGen9Team(payload.team));
-  const player=makeGen9Player(socket,payload.playerName,team,"p2");
-  assignGen9Client(socket,room,player);
+async function startGen9RoomBattle(room, p1, player) {
+  room.phase = "starting";
   try {
-    const p1=room.players.get("p1");
     const p1Snapshot=await gen9Service.createBattle({
       playerTeam:p1.team,opponentTeam:player.team,
       player1Name:p1.name,player2Name:player.name,kind:"online"
@@ -305,14 +317,69 @@ async function joinGen9Room(socket,payload) {
     room.actions=new Map();
     room.phase="active";
     room.turn=1;
-    send(p1.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p1",snapshot:p1Snapshot,playerName:p1.name,opponent:player.name});
-    send(player.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p2",snapshot:p2Snapshot,playerName:player.name,opponent:p1.name});
+    const matchType=room.matchType==="random"?"random":"private";
+    send(p1.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p1",snapshot:p1Snapshot,playerName:p1.name,opponent:player.name,matchType});
+    send(player.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p2",snapshot:p2Snapshot,playerName:player.name,opponent:p1.name,matchType});
   } catch(error) {
-    send(socket,{type:"error",message:error.message || "Showdown対戦を開始できませんでした。"});
-    for(const p of room.players.values())send(p.socket,{type:"gen9-room-error",message:error.message || "Showdown対戦を開始できませんでした。"});
+    const message=error.message || "Showdown対戦を開始できませんでした。";
+    console.error("[gen9-match] battle startup failed", room.code, room.matchType || "private", error?.stack || error);
+    for(const p of room.players.values())send(p.socket,{type:"gen9-room-error",message});
     gen9Rooms.delete(room.code);
     for(const p of room.players.values())try{p.socket.close(1011,"battle startup failed");}catch(_){}
+    if(room.battleId)gen9Service.destroy(room.battleId);
   }
+}
+async function joinGen9Room(socket,payload) {
+  detach(socket,"replaced");
+  const code=safeString(payload.roomCode,6).toUpperCase();
+  const room=gen9Rooms.get(code);
+  if(!room||room.phase!=="waiting"||room.players.size!==1) {
+    send(socket,{type:"error",message:"そのプライベートルームは見つからないか、すでに満員です。"});
+    return;
+  }
+  const team=gen9Service.validateTeam(sanitizeGen9Team(payload.team));
+  const player=makeGen9Player(socket,payload.playerName,team,"p2");
+  assignGen9Client(socket,room,player);
+  const p1=room.players.get("p1");
+  await startGen9RoomBattle(room,p1,player);
+}
+async function joinGen9RandomQueue(socket,payload) {
+  detach(socket,"replaced");
+  const team=gen9Service.validateTeam(sanitizeGen9Team(payload.team));
+  // Discard stale queue entries before choosing the oldest available opponent.
+  for(let i=randomMatchQueue.length-1;i>=0;i--){
+    if(randomMatchQueue[i].socket.readyState!==WebSocket.OPEN){
+      randomMatchQueue.splice(i,1);
+    }
+  }
+  const waitingIndex=randomMatchQueue.findIndex(entry=>entry.socket!==socket);
+  if(waitingIndex<0){
+    randomMatchQueue.push({
+      socket,
+      team,
+      name:safeString(payload.playerName || "トレーナー",18) || "トレーナー",
+      joinedAt:Date.now()
+    });
+    clients.set(socket,{randomQueued:true});
+    send(socket,{type:"gen9-random-queued",position:randomMatchQueue.length});
+    console.info("[gen9-matchmaking] player queued", "queueSize="+randomMatchQueue.length);
+    return;
+  }
+  const waiting=randomMatchQueue.splice(waitingIndex,1)[0];
+  clients.set(waiting.socket,{});
+  const code=makeRoomCode();
+  const p1=makeGen9Player(waiting.socket,waiting.name,waiting.team,"p1");
+  const p2=makeGen9Player(socket,payload.playerName,team,"p2");
+  const room={
+    code,players:new Map(),phase:"starting",battleId:null,tokens:null,
+    actions:new Map(),cursors:{p1:0,p2:0},turn:1,
+    createdAt:Date.now(),lastActive:Date.now(),resolving:false,matchType:"random"
+  };
+  gen9Rooms.set(code,room);
+  assignGen9Client(waiting.socket,room,p1);
+  assignGen9Client(socket,room,p2);
+  console.info("[gen9-matchmaking] players paired", "room="+code);
+  await startGen9RoomBattle(room,p1,p2);
 }
 async function handleGen9Action(socket,payload) {
   const client=clients.get(socket)||{};
@@ -395,7 +462,22 @@ function handleMessage(socket, payload) {
     return;
   }
   if(type==="join-gen9-room") {
-    void joinGen9Room(socket,payload).catch(error=>send(socket,{type:"error",message:error.message || "第9世代ルームに参加できませんでした。"}));
+    void joinGen9Room(socket,payload).catch(error=>send(socket,{type:"error",message:error.message || "プライベートルームに参加できませんでした。"}));
+    return;
+  }
+  if(type==="random-match-join") {
+    void joinGen9RandomQueue(socket,payload).catch(error=>{
+      console.error("[gen9-matchmaking] queue join failed",error?.stack||error);
+      send(socket,{type:"error",message:error.message || "ランダムマッチに参加できませんでした。"});
+    });
+    return;
+  }
+  if(type==="random-match-cancel") {
+    const removed=removeRandomQueueEntry(socket);
+    const state=clients.get(socket)||{};
+    if(state.randomQueued)clients.set(socket,{});
+    send(socket,{type:"gen9-random-cancelled",wasQueued:removed || !!state.randomQueued});
+    console.info("[gen9-matchmaking] queue cancel", "removed="+(removed || !!state.randomQueued));
     return;
   }
   if(type==="gen9-action") {
@@ -641,6 +723,14 @@ wss.on("connection",(socket) => {
 const cleanup = setInterval(() => {
   const now = Date.now();
   gen9Service.removeExpired();
+  for(let i=randomMatchQueue.length-1;i>=0;i--){
+    const entry=randomMatchQueue[i];
+    if(now-entry.joinedAt>ROOM_TTL_MS || entry.socket.readyState!==WebSocket.OPEN){
+      randomMatchQueue.splice(i,1);
+      if(clients.get(entry.socket)?.randomQueued)clients.set(entry.socket,{});
+      send(entry.socket,{type:"gen9-random-cancelled",reason:"expired"});
+    }
+  }
   for (const room of gen9Rooms.values()) {
     if(now-room.lastActive>ROOM_TTL_MS) {
       for(const player of room.players.values())send(player.socket,{type:"error",message:"第9世代ルームの有効期限が切れました。"});
