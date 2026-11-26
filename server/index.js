@@ -90,6 +90,7 @@ const ROOM_TTL_MS = 20 * 60 * 1000;
 const MAX_TEAM_SIZE = 6;
 const MAX_MESSAGE_BYTES = 512 * 1024;
 const rooms = new Map();
+const gen9Rooms = new Map();
 const clients = new WeakMap();
 const MIME = {
   ".html":"text/html; charset=utf-8",".js":"text/javascript; charset=utf-8",
@@ -125,9 +126,10 @@ function safeStatBlock(value, keys, max) {
   }
   return out;
 }
-function sanitizeTeam(input) {
-  if (!Array.isArray(input) || input.length !== MAX_TEAM_SIZE) {
-    throw new Error("チームは6匹にしてください。");
+function sanitizeTeam(input, allowPartial = false) {
+  if (!Array.isArray(input) || input.length < 1 || input.length > MAX_TEAM_SIZE ||
+      (!allowPartial && input.length !== MAX_TEAM_SIZE)) {
+    throw new Error(allowPartial ? "チームは1〜6匹にしてください。" : "チームは6匹にしてください。");
   }
   const statKeys = ["hp","atk","def","spa","spd","spe"];
   return input.map((raw) => {
@@ -161,13 +163,30 @@ function makeRoomCode() {
   for (let tries=0;tries<100;tries++) {
     let code = "";
     for (let i=0;i<6;i++) code += alphabet[crypto.randomInt(0,alphabet.length)];
-    if (!rooms.has(code)) return code;
+    if (!rooms.has(code) && !gen9Rooms.has(code)) return code;
   }
   throw new Error("ルームを作成できませんでした。もう一度試してください。");
 }
 function detach(socket, reason) {
   const state = clients.get(socket);
-  if (!state || !state.roomCode) return;
+  if (!state) return;
+  if (state.gen9RoomCode) {
+    const gameRoom = gen9Rooms.get(state.gen9RoomCode);
+    clients.set(socket,{});
+    if (gameRoom) {
+      const player = gameRoom.players.get(state.playerId);
+      if (player) gameRoom.players.delete(state.playerId);
+      gameRoom.lastActive = Date.now();
+      for (const peer of gameRoom.players.values()) {
+        send(peer.socket,{type:"gen9-peer-left",reason:reason || "disconnect"});
+        try { peer.socket.close(1000,"opponent disconnected"); } catch (_) {}
+      }
+      if (gameRoom.battleId) gen9Service.destroy(gameRoom.battleId);
+      gen9Rooms.delete(gameRoom.code);
+    }
+    return;
+  }
+  if (!state.roomCode) return;
   const room = rooms.get(state.roomCode);
   clients.set(socket,{});
   if (!room) return;
@@ -199,6 +218,94 @@ function makePlayer(socket, name, team) {
     socket
   };
 }
+function assignGen9Client(socket, room, player) {
+  clients.set(socket,{gen9RoomCode:room.code,playerId:player.id});
+  player.socket=socket;
+  room.players.set(player.side,player);
+  room.lastActive=Date.now();
+}
+function makeGen9Player(socket,name,team,side) {
+  return {id:crypto.randomUUID(),side,name:safeString(name || "トレーナー",18) || "トレーナー",team,socket,token:null};
+}
+async function joinGen9Room(socket,payload) {
+  detach(socket,"replaced");
+  const code=safeString(payload.roomCode,6).toUpperCase();
+  const room=gen9Rooms.get(code);
+  if(!room||room.phase!=="waiting"||room.players.size!==1) {
+    send(socket,{type:"error",message:"その第9世代ルームは見つからないか、すでに満員です。"});
+    return;
+  }
+  const team=sanitizeTeam(payload.team,true);
+  const player=makeGen9Player(socket,payload.playerName,team,"p2");
+  assignGen9Client(socket,room,player);
+  try {
+    const p1=room.players.get("p1");
+    const p1Snapshot=await gen9Service.createBattle({
+      playerTeam:p1.team,opponentTeam:player.team,
+      player1Name:p1.name,player2Name:player.name,kind:"online"
+    });
+    const engineSession=gen9Service.get(p1Snapshot.battleId,p1Snapshot.token,"p1");
+    const p2Snapshot=gen9Service.snapshot(engineSession,"p2",0);
+    p1.token=p1Snapshot.token;
+    player.token=p2Snapshot.token;
+    room.battleId=p1Snapshot.battleId;
+    room.tokens={p1:p1.token,p2:player.token};
+    room.cursors={p1:p1Snapshot.logCursor||0,p2:p2Snapshot.logCursor||0};
+    room.actions=new Map();
+    room.phase="active";
+    room.turn=1;
+    send(p1.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p1",snapshot:p1Snapshot,opponent:player.name});
+    send(player.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p2",snapshot:p2Snapshot,opponent:p1.name});
+  } catch(error) {
+    send(socket,{type:"error",message:error.message || "Showdown対戦を開始できませんでした。"});
+    for(const p of room.players.values())send(p.socket,{type:"gen9-room-error",message:error.message || "Showdown対戦を開始できませんでした。"});
+    gen9Rooms.delete(room.code);
+    for(const p of room.players.values())try{p.socket.close(1011,"battle startup failed");}catch(_){}
+  }
+}
+async function handleGen9Action(socket,payload) {
+  const client=clients.get(socket)||{};
+  const room=client.gen9RoomCode?gen9Rooms.get(client.gen9RoomCode):null;
+  const player=room?.players.get(client.playerId===room.players.get("p1")?.id?"p1":"p2");
+  if(!room||!player||room.phase!=="active") {
+    send(socket,{type:"error",message:"第9世代の対戦ルームに参加していません。"});
+    return;
+  }
+  if(room.resolving) {
+    send(socket,{type:"error",message:"相手の行動を処理中です。"});
+    return;
+  }
+  if(room.actions.has(player.side)) {
+    send(socket,{type:"error",message:"このターンの行動は送信済みです。"});
+    return;
+  }
+  try {
+    gen9Service.validateAction(room.battleId,player.token,player.side,payload.action||{});
+    room.actions.set(player.side,payload.action||{});
+    send(socket,{type:"gen9-action-accepted",turn:room.turn});
+    if(room.actions.size<2)return;
+    room.resolving=true;
+    const updates=await gen9Service.submitOnlineTurn(
+      room.battleId,room.tokens.p1,room.tokens.p2,
+      {p1:room.actions.get("p1"),p2:room.actions.get("p2")},
+      room.cursors.p1,room.cursors.p2
+    );
+    room.actions.clear();
+    room.turn+=1;
+    room.cursors={p1:updates.p1.logCursor||room.cursors.p1,p2:updates.p2.logCursor||room.cursors.p2};
+    room.phase=updates.p1.done?"ended":"active";
+    for(const [side,update] of [["p1",updates.p1],["p2",updates.p2]]) {
+      const recipient=room.players.get(side);
+      if(recipient)send(recipient.socket,{type:"gen9-battle-update",snapshot:update});
+    }
+    room.lastActive=Date.now();
+  } catch(error) {
+    room.actions.delete(player.side);
+    send(socket,{type:"error",message:error.message || "行動を処理できませんでした。"});
+  } finally {
+    room.resolving=false;
+  }
+}
 function sanitizeAction(action, player, opponent) {
   if (!action || typeof action !== "object") throw new Error("行動データが不正です。");
   const actorUid = safeString(action.actorUid,96);
@@ -225,6 +332,44 @@ function sanitizeAction(action, player, opponent) {
 function handleMessage(socket, payload) {
   const state = clients.get(socket) || {};
   const type = safeString(payload?.type,40);
+  if(type==="create-gen9-room") {
+    detach(socket,"replaced");
+    const team=sanitizeTeam(payload.team,true);
+    const code=makeRoomCode();
+    const player=makeGen9Player(socket,payload.playerName,team,"p1");
+    const room={code,players:new Map(),phase:"waiting",battleId:null,tokens:null,actions:new Map(),cursors:{p1:0,p2:0},turn:1,createdAt:Date.now(),lastActive:Date.now(),resolving:false};
+    gen9Rooms.set(code,room);
+    assignGen9Client(socket,room,player);
+    send(socket,{type:"gen9-room-created",roomCode:code,playerId:player.id});
+    return;
+  }
+  if(type==="join-gen9-room") {
+    void joinGen9Room(socket,payload);
+    return;
+  }
+  if(type==="gen9-action") {
+    void handleGen9Action(socket,payload);
+    return;
+  }
+  if(type==="leave-gen9-room") {
+    detach(socket,"leave");
+    send(socket,{type:"gen9-left-room"});
+    return;
+  }
+  if(type==="gen9-forfeit") {
+    const client=clients.get(socket)||{};
+    const room=client.gen9RoomCode?gen9Rooms.get(client.gen9RoomCode):null;
+    const side=room?.players.get("p1")?.id===client.playerId?"p1":"p2";
+    if(room&&room.phase==="active") {
+      const winner=side==="p1"?"p2":"p1";
+      room.phase="ended";
+      const p=room.players.get(winner);
+      if(p)send(p.socket,{type:"gen9-forfeit-win"});
+      const forfeiter=room.players.get(side);
+      if(forfeiter)send(forfeiter.socket,{type:"gen9-forfeit-lost"});
+    }
+    return;
+  }
   if (type === "create-room") {
     detach(socket,"replaced");
     const team = sanitizeTeam(payload.team);
@@ -433,6 +578,14 @@ wss.on("connection",(socket) => {
 const cleanup = setInterval(() => {
   const now = Date.now();
   gen9Service.removeExpired();
+  for (const room of gen9Rooms.values()) {
+    if(now-room.lastActive>ROOM_TTL_MS) {
+      for(const player of room.players.values())send(player.socket,{type:"error",message:"第9世代ルームの有効期限が切れました。"});
+      if(room.battleId)gen9Service.destroy(room.battleId);
+      for(const player of room.players.values())try{player.socket.close(1000,"room expired");}catch(_){}
+      gen9Rooms.delete(room.code);
+    }
+  }
   for (const room of rooms.values()) {
     if (now - room.lastActive > ROOM_TTL_MS) {
       broadcast(room,{type:"error",message:"ルームの有効期限が切れました。"});
@@ -450,6 +603,10 @@ server.listen(PORT,HOST,() => {
 });
 function shutdown() {
   clearInterval(cleanup);
+  for (const room of gen9Rooms.values()) {
+    if(room.battleId)gen9Service.destroy(room.battleId);
+    for(const player of room.players.values())try{send(player.socket,{type:"error",message:"サーバーを再起動しています。"});player.socket.close(1012,"server restart");}catch(_){}
+  }
   for (const room of rooms.values()) {
     broadcast(room,{type:"error",message:"サーバーを再起動しています。"});
     for (const player of room.players.values()) {
