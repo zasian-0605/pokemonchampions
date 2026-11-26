@@ -90,32 +90,51 @@
   }
   async function runDiagnostic(){
     if(diagnosticBusy)return;
-    diagnosticBusy=true;diagnosticReport="診断を開始します…";repaint();
-    const lines=[];
-    const check=(name,ok,detail)=>lines.push((ok?"OK":"NG")+"｜"+name+"："+detail);
+    diagnosticBusy=true;diagnosticReport="詳細診断を開始…";repaint();
+    const lines=[],started=Date.now();
+    const check=(name,ok,detail)=>lines.push((ok?"OK":"NG")+"｜"+name+"："+String(detail||"").slice(0,700));
+    const safeJson=async r=>{const text=await r.text();let data=null;try{data=JSON.parse(text);}catch(_){}return {text,data};};
+    const timedFetch=async(url,options)=>{const t=Date.now();try{const response=await fetch(url,options);const body=await safeJson(response);return {response,body,ms:Date.now()-t};}catch(e){return {error:e,ms:Date.now()-t};}};
     try{
-      const healthResponse=await fetch(API+"/health",{cache:"no-store"});
-      const health=await healthResponse.json().catch(()=>({}));
-      check("対戦サーバー",healthResponse.ok&&health.ok===true,healthResponse.ok?(health.engine||"応答あり"):"HTTP "+healthResponse.status+" "+(health.error||"応答エラー"));
-      if(!healthResponse.ok||!health.ok)throw new Error("対戦サーバーのヘルスチェックに失敗しました。");
-      const catalogResponse=await fetch(API+"/catalog",{cache:"no-store"});
-      const catalog=await catalogResponse.json().catch(()=>({}));
-      check("技・特性・持ち物データ",catalogResponse.ok&&Array.isArray(catalog.moves)&&Array.isArray(catalog.abilities)&&Array.isArray(catalog.items),catalogResponse.ok?("技 "+(catalog.counts?.moves??catalog.moves?.length??0)+" / 特性 "+(catalog.counts?.abilities??catalog.abilities?.length??0)+" / 持ち物 "+(catalog.counts?.items??catalog.items?.length??0)):"HTTP "+catalogResponse.status+" "+(catalog.error||"取得失敗"));
-      if(!catalogResponse.ok)throw new Error("カタログ取得に失敗しました。");
+      check("画面・実行環境",!!S()&&S()?.page==="gen9-battle","page="+(S()?.page||"不明")+" / browser="+navigator.userAgent);
+      check("API接続先",true,location.origin+API);
+      const healthResult=await timedFetch(API+"/health",{cache:"no-store"});
+      if(healthResult.error){check("ヘルス通信",false,healthResult.error.message);throw healthResult.error;}
+      const {response:healthResponse,body:healthBody}=healthResult,health=healthBody.data||{};
+      check("対戦サーバー",healthResponse.ok&&health.ok===true, "HTTP "+healthResponse.status+" / "+(health.engine||healthBody.text||"応答あり")+" / "+healthResult.ms+"ms");
+      check("ヘルス応答形式",!!healthBody.data,healthBody.data?"JSON":"JSONではない: "+healthBody.text.slice(0,250));
+      if(!healthResponse.ok||!health.ok)throw new Error("ヘルスチェック失敗");
+      const catalogResult=await timedFetch(API+"/catalog",{cache:"no-store"});
+      if(catalogResult.error){check("カタログ通信",false,catalogResult.error.message);throw catalogResult.error;}
+      const {response:catalogResponse,body:catalogBody}=catalogResult,catalog=catalogBody.data||{};
+      const catalogOk=catalogResponse.ok&&Array.isArray(catalog.moves)&&Array.isArray(catalog.abilities)&&Array.isArray(catalog.items);
+      check("技・特性・持ち物データ",catalogOk,"HTTP "+catalogResponse.status+" / 技 "+(catalog.moves?.length??"?")+"・特性 "+(catalog.abilities?.length??"?")+"・持ち物 "+(catalog.items?.length??"?")+" / "+catalogResult.ms+"ms");
+      check("カタログ応答形式",!!catalogBody.data,catalogBody.data?"JSON":"応答本文: "+catalogBody.text.slice(0,300));
+      if(!catalogOk)throw new Error("カタログの形式または取得に失敗");
       const playerTeam=buildTeam();
-      check("チーム編成",playerTeam.length>0&&playerTeam.length<=6,playerTeam.length+"匹");
-      if(!playerTeam.length)throw new Error("ポケモンが選ばれていません。");
+      check("チーム人数",playerTeam.length>=1&&playerTeam.length<=6,playerTeam.length+"匹（1〜6匹が必要）");
+      if(!playerTeam.length)throw new Error("チームが空です");
+      check("ポケモン識別子",playerTeam.every(m=>!!(m.speciesId||m.species)),playerTeam.map(m=>(m.name||"?")+"="+(m.speciesId||m.species||"未設定")).join(" / "));
       const noMoves=playerTeam.filter(m=>!m.moves?.length);
-      check("技設定",noMoves.length===0,noMoves.length?noMoves.map(m=>m.name||m.species).join("、")+" に技がありません":"全員に技あり");
-      if(noMoves.length)throw new Error("技を覚えていないポケモンがいます。");
-      diagnosticReport=lines.join("\n")+"\n\n対戦開始テスト中…";repaint();
-      const battleResponse=await fetch(API+"/battles",{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",body:JSON.stringify({playerTeam,playerName:"診断テスト"})});
-      const battle=await battleResponse.json().catch(()=>({}));
-      if(!battleResponse.ok){check("対戦開始テスト",false,"HTTP "+battleResponse.status+"："+(battle.error||battle.message||"詳細不明"));throw new Error("対戦開始テストが失敗しました。");}
-      check("対戦開始テスト",true,"Showdownが対戦を作成できました");
-      if(battle.battleId&&battle.token){try{await fetch(API+"/battles/"+encodeURIComponent(battle.battleId)+"?token="+encodeURIComponent(battle.token),{method:"DELETE",cache:"no-store"});check("テスト対戦の後片付け",true,"テスト用対戦を終了しました");}catch(_){check("テスト対戦の後片付け",false,"自動終了できませんでした");}}
-      diagnosticReport=lines.join("\n")+"\n\n診断結果：対戦開始まで正常です。";
-    }catch(e){diagnosticReport=lines.join("\n")+"\n\n診断停止："+(e?.message||String(e));}
+      check("技設定",!noMoves.length,noMoves.length?noMoves.map(m=>m.name||m.species).join("、")+" に技なし":"全員に技あり");
+      check("技数",playerTeam.every(m=>m.moves.length<=4),playerTeam.map(m=>(m.name||"?")+":"+m.moves.length).join(" / "));
+      check("技ID形式",playerTeam.every(m=>m.moves.every(x=>typeof x==="string"&&x.length>0)),playerTeam.map(m=>(m.name||"?")+":"+m.moves.join(",")).join(" / "));
+      check("レベル値",playerTeam.every(m=>Number.isFinite(m.level)&&m.level>=1&&m.level<=100),playerTeam.map(m=>(m.name||"?")+" Lv."+m.level).join(" / "));
+      check("持ち物・特性値",playerTeam.map(m=>(m.name||"?")+" item="+(m.heldItem||"なし")+" ability="+(m.abilityId||"なし")).join(" / "));
+      check("チーム送信データ",true,JSON.stringify(playerTeam).slice(0,1200));
+      diagnosticReport=lines.join("\n")+"\n\n対戦生成テスト中…";repaint();
+      const battleResult=await timedFetch(API+"/battles",{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",body:JSON.stringify({playerTeam,playerName:"診断テスト"})});
+      if(battleResult.error){check("対戦開始通信",false,battleResult.error.message+" / "+battleResult.ms+"ms");throw battleResult.error;}
+      const battleResponse=battleResult.response,battle=battleResult.body.data||{};
+      check("対戦開始テスト",battleResponse.ok&&!!battle.battleId,"HTTP "+battleResponse.status+" / "+battleResult.ms+"ms / "+(battle.error||battle.message||battle.battleId||battleResult.body.text.slice(0,700)||"詳細なし"));
+      check("対戦応答形式",!!battleResult.body.data,battleResult.body.data?"JSON":"本文: "+battleResult.body.text.slice(0,700));
+      if(!battleResponse.ok||!battle.battleId)throw new Error("対戦開始テスト失敗");
+      if(battle.battleId&&battle.token){
+        const cleanup=await timedFetch(API+"/battles/"+encodeURIComponent(battle.battleId)+"?token="+encodeURIComponent(battle.token),{method:"DELETE",cache:"no-store"});
+        check("テスト対戦の後片付け",!!cleanup.response?.ok,cleanup.error?.message||("HTTP "+cleanup.response?.status+" / "+cleanup.ms+"ms"));
+      }else check("テスト対戦の後片付け",false,"battleId/tokenが応答にありません");
+      diagnosticReport=lines.join("\n")+"\n\n診断完了："+(Date.now()-started)+"ms";
+    }catch(e){diagnosticReport=lines.join("\n")+"\n\n診断停止："+(e?.message||String(e))+"\n所要時間："+(Date.now()-started)+"ms";}
     finally{diagnosticBusy=false;repaint();}
   }
   function render(){
