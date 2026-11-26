@@ -41,10 +41,24 @@ function boundedInt(value, min, max, fallback) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.max(min, Math.min(max, Math.floor(n))) : fallback;
 }
-function cleanStats(source, max, defaultValue) {
-  const input = source && typeof source === "object" ? source : {};
+function cleanStats(source, max, defaultValue, speciesName, label) {
+  const input = source == null ? {} : source;
+  if (typeof input !== "object" || Array.isArray(input)) {
+    throw new Error(speciesName + " の" + label + "データが不正です。");
+  }
   const result = {};
-  for (const key of STAT_KEYS) result[key] = boundedInt(input[key], 0, max, defaultValue);
+  for (const key of STAT_KEYS) {
+    const rawValue = input[key];
+    if (rawValue == null || rawValue === "") {
+      result[key] = defaultValue;
+      continue;
+    }
+    const number = Number(rawValue);
+    if (typeof rawValue === "boolean" || !Number.isInteger(number) || number < 0 || number > max) {
+      throw new Error(speciesName + " の" + label + "（" + key + "）は0〜" + max + "の整数にしてください。");
+    }
+    result[key] = number;
+  }
   return result;
 }
 function resolveEntry(table, value) {
@@ -53,7 +67,9 @@ function resolveEntry(table, value) {
   return entry && entry.exists ? entry : null;
 }
 function normalizePokemon(raw, index) {
-  if (!raw || typeof raw !== "object") throw new Error("ポケモン " + (index + 1) + " のデータが不正です。");
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("ポケモン " + (index + 1) + " のデータが不正です。");
+  }
 
   const speciesInput = raw.species || raw.speciesId || raw.formId || raw.name;
   const species = resolveEntry(Sim.Dex.species, speciesInput);
@@ -61,24 +77,43 @@ function normalizePokemon(raw, index) {
     throw new Error("「" + String(speciesInput || "不明") + "」はShowdownの全国図鑑に存在しません。");
   }
 
-  const rawMoves = Array.isArray(raw.moves) ? raw.moves : [];
+  const rawMoves = raw.moves == null ? [] : raw.moves;
+  if (!Array.isArray(rawMoves)) {
+    throw new Error(species.name + " の技データが配列ではありません。");
+  }
+  if (rawMoves.length > 4) {
+    throw new Error(species.name + " の技は4つまで設定できます（入力：" + rawMoves.length + "つ）。");
+  }
   const moves = [];
+  const moveIds = new Set();
   for (const value of rawMoves) {
-    const moveInput = typeof value === "string" ? value : value?.id || value?.name;
+    const moveInput = typeof value === "string" ? value.trim() : value?.id || value?.name;
     const move = resolveEntry(Sim.Dex.moves, moveInput);
-    if (!move) continue;
-    if (!moves.includes(move.name)) moves.push(move.name);
-    if (moves.length === 4) break;
+    if (!move) {
+      throw new Error(species.name + " の技「" + String(moveInput || "不明") + "」はShowdownの技データにありません。");
+    }
+    if (moveIds.has(move.id)) {
+      throw new Error(species.name + " に同じ技「" + move.name + "」が重複して設定されています。");
+    }
+    moveIds.add(move.id);
+    moves.push(move.name);
   }
   if (!moves.length) throw new Error(species.name + " に有効な技が設定されていません。");
 
-  const abilityInput = raw.ability || raw.abilityId;
-  let ability = resolveEntry(Sim.Dex.abilities, abilityInput);
-  if (!ability || !Object.values(species.abilities || {}).some(
-    value => toID(value) === ability.id
-  )) {
-    const defaultAbility = Object.values(species.abilities || {})[0];
-    ability = resolveEntry(Sim.Dex.abilities, defaultAbility);
+  const rawAbility = raw.ability || raw.abilityId || "";
+  const abilityInput = typeof rawAbility === "object"
+    ? rawAbility.id || rawAbility.name
+    : rawAbility;
+  let ability = abilityInput ? resolveEntry(Sim.Dex.abilities, abilityInput) : null;
+  if (abilityInput && !ability) {
+    throw new Error(species.name + " の特性「" + String(abilityInput) + "」はShowdownの特性データにありません。");
+  }
+  const speciesAbilities = Object.values(species.abilities || {});
+  if (ability && !speciesAbilities.some(value => toID(value) === ability.id)) {
+    throw new Error(species.name + " は特性「" + ability.name + "」を使用できません。");
+  }
+  if (!ability) {
+    ability = resolveEntry(Sim.Dex.abilities, speciesAbilities[0]);
   }
   if (!ability) throw new Error(species.name + " の特性を判定できません。");
 
@@ -89,19 +124,36 @@ function normalizePokemon(raw, index) {
     throw new Error("持ち物「" + String(rawItem) + "」はShowdownのアイテムデータにありません。");
   }
 
-  const natureInput = NATURES_JA_TO_EN[raw.nature] || raw.nature || "Serious";
-  const nature = resolveEntry(Sim.Dex.natures, natureInput) || Sim.Dex.natures.get("Serious");
-  const ivs = cleanStats(raw.ivs, 31, 31);
-  const evs = cleanStats(raw.evs, 252, 0);
+  const rawNature = raw.nature == null || raw.nature === "" ? "Serious" : raw.nature;
+  const natureInput = NATURES_JA_TO_EN[rawNature] || rawNature;
+  const nature = resolveEntry(Sim.Dex.natures, natureInput);
+  if (!nature) {
+    throw new Error(species.name + " の性格「" + String(rawNature) + "」は正しい性格データではありません。");
+  }
+
+  const ivs = cleanStats(raw.ivs, 31, 31, species.name, "個体値");
+  const evs = cleanStats(raw.evs, 252, 0, species.name, "努力値");
   const evTotal = Object.values(evs).reduce((sum, n) => sum + n, 0);
   if (evTotal > 510) throw new Error(species.name + " の努力値合計が510を超えています。");
+  // Showdown rejects a completely zeroed EV spread in this format. One HP EV
+  // does not change stats (stat formulas use floor(EV / 4)), but passes validation.
+  if (evTotal === 0) evs.hp = 1;
 
-  const allowedTera = new Set([
+  const allowedTera = [
     "Normal","Fire","Water","Electric","Grass","Ice","Fighting","Poison","Ground",
     "Flying","Psychic","Bug","Rock","Ghost","Dragon","Dark","Steel","Fairy","Stellar"
-  ]);
-  const requestedTera = String(raw.teraType || species.types?.[0] || "Normal");
-  const teraType = allowedTera.has(requestedTera) ? requestedTera : (species.types?.[0] || "Normal");
+  ];
+  const hasRequestedTera = raw.teraType != null && String(raw.teraType).trim() !== "";
+  const teraInput = hasRequestedTera ? String(raw.teraType).trim() : (species.types?.[0] || "Normal");
+  const teraType = allowedTera.find(type => type.toLowerCase() === teraInput.toLowerCase());
+  if (hasRequestedTera && !teraType) {
+    throw new Error(species.name + " のテラスタイプ「" + teraInput + "」が不正です。");
+  }
+
+  const rawLevel = raw.level == null || raw.level === "" ? 50 : Number(raw.level);
+  if (typeof raw.level === "boolean" || !Number.isInteger(rawLevel) || rawLevel < 1 || rawLevel > 100) {
+    throw new Error(species.name + " のレベルは1〜100の整数にしてください。");
+  }
 
   return {
     name: String(raw.nickname || raw.name || species.name).slice(0, 18),
@@ -113,9 +165,9 @@ function normalizePokemon(raw, index) {
     gender: ["M", "F"].includes(raw.gender) ? raw.gender : "",
     evs,
     ivs,
-    level: boundedInt(raw.level, 1, 100, 50),
+    level: rawLevel,
     shiny: !!raw.shiny,
-    teraType
+    teraType: teraType || species.types?.[0] || "Normal"
   };
 }
 function normalizeTeam(input, skipValidation = false) {
@@ -197,6 +249,11 @@ class Gen9BattleService {
   catalog() {
     if (!cachedCatalog) cachedCatalog = loadCatalogSnapshot();
     return cachedCatalog;
+  }
+
+  // Validate and normalize a team before it is accepted into an online room.
+  validateTeam(input) {
+    return normalizeTeam(input, false);
   }
 
   async createBattle(options = {}) {
