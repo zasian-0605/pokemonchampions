@@ -59,6 +59,37 @@ async function main() {
   assert.equal(service.destroy(first.battleId), true);
   assert.equal(service.destroy(first.battleId), false);
 
+  const teraAudit = await service.runAuditCase({
+    speciesId: "mew",
+    speciesName: "Mew",
+    moveId: "tackle",
+    abilityId: "synchronize",
+    itemId: "lifeorb",
+    teraType: "Fire",
+    terastallize: true,
+    targetSpeciesId: "chansey"
+  });
+  assert.equal(teraAudit.moveWasUsed, true, "audit case should execute the selected move");
+  assert.equal(teraAudit.teraApplied, true, "audit case should actually Terastallize");
+  assert.equal(teraAudit.actualTeraType, "Fire");
+  assert.equal(teraAudit.heldItem, "lifeorb");
+
+  const { AutoAuditLab } = require("./auto-audit");
+  const auditLab = new AutoAuditLab({ battleService: service });
+  const auditHealth = auditLab.health();
+  assert.equal(auditHealth.mode, "memory-only");
+  assert.equal(auditHealth.databaseRequired, false);
+  assert.equal(auditHealth.adminRequired, false);
+  assert.equal(auditHealth.counts.teraOptions, 20);
+  assert.equal(
+    auditHealth.counts.matrixCases,
+    auditHealth.counts.species * auditHealth.counts.moves * 20 * (auditHealth.counts.items + 1)
+  );
+  const auditJob = auditLab.createJob();
+  assert.equal(auditJob.status, "running");
+  assert.equal(auditJob.total, auditHealth.counts.totalCases);
+  auditLab.job.status = "cancelled";
+
   const online = await service.createBattle({
     kind: "online",
     player1Name: "Player A",
