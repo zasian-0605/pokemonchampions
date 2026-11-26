@@ -29,11 +29,14 @@ client no longer calculates those outcomes for the Generation 9 screen.
 Use Node.js 22.18.0 or newer:
 
 ```sh
-npm --prefix server install
-npm --prefix server start
+npm install
+npm start
 ```
 
-Open `http://localhost:10000`.
+Open `http://localhost:10000`. The Render service can use the same root
+`npm install` / `npm start` commands. Alternatively, for an isolated server
+install, run `npm --prefix server install` followed by
+`npm --prefix server start`.
 
 ## Generation 9 API
 
