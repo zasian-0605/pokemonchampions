@@ -2,12 +2,16 @@
   "name": "pokemonchampions",
   "version": "1.0.1",
   "private": true,
-  "description": "Static file server for the Pokémon Champions 2D prototype",
+  "description": "Pokémon Champions 2D with server-authoritative Generation 9 Showdown battles",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server/index.js"
   },
   "engines": {
     "node": ">=22.18.0"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "pokemon-showdown": "0.11.11"
   }
 }
