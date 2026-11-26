@@ -5,6 +5,10 @@ const { Gen9BattleService, FORMAT_ID } = require("./gen9-engine");
 
 async function main() {
   const service = new Gen9BattleService();
+  const catalog = service.catalog();
+  assert.ok(catalog.moves.length > 500);
+  assert.ok(catalog.abilities.some(item => item.id === "quarkdrive"));
+  assert.ok(catalog.items.some(item => item.id === "boosterenergy"));
 
   const first = await service.createBattle({
     playerName: "Gen9 Test",
