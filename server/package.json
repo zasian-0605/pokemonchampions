@@ -5,7 +5,8 @@
   "description": "Room-code WebSocket relay and static host for the Pokémon Champions 2D fan prototype.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node test-gen9-engine.js"
   },
   "dependencies": {
     "ws": "^8.18.0",
