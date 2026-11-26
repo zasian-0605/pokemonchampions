@@ -232,6 +232,8 @@ class Gen9BattleService {
     const abilityId = String(payload.abilityId || "");
     const itemId = String(payload.itemId || "");
     const targetSpeciesId = String(payload.targetSpeciesId || "chansey");
+    const wantsTera = payload.terastallize === true;
+    const requestedTeraType = payload.teraType ? String(payload.teraType) : null;
     const playerMon = {
       species: speciesId,
       name: String(payload.speciesName || speciesId),
@@ -240,6 +242,7 @@ class Gen9BattleService {
       item: itemId,
       level: 100,
       nature: "Serious",
+      teraType: requestedTeraType || undefined,
       ivs: {hp:31,atk:31,def:31,spa:31,spd:31,spe:31},
       evs: {hp:0,atk:0,def:0,spa:0,spd:0,spe:0}
     };
@@ -268,26 +271,56 @@ class Gen9BattleService {
       const p2Request = session.requests.p2;
       const p1Moves = p1Request?.active?.[0]?.moves || [];
       if (!p1Moves.length) throw new Error("Showdownから技の選択画面が返りませんでした。");
+      const moveIndex = p1Moves.findIndex(move =>
+        toID(move.id || move.move) === toID(moveId)
+      );
+      if (moveIndex < 0) {
+        throw new Error("指定した技がShowdownの行動候補にありません: " + moveId);
+      }
+      if (p1Moves[moveIndex].disabled) {
+        throw new Error("指定した技がこの条件では使用不可です: " + moveId);
+      }
+      const active = p1Request?.active?.[0] || {};
+      if (wantsTera && !active.canTerastallize) {
+        throw new Error("このバトル状態ではテラスタルを発動できません。");
+      }
+
       const from = session.logs.length;
       const p1Version = session.requestVersion.p1;
       const cpuChoice = this.chooseCpuAction(p2Request);
-      await session.stream.write(">p1 move 1");
+      const playerChoice = ">p1 move " + (moveIndex + 1) + (wantsTera ? " terastallize" : "");
+      await session.stream.write(playerChoice);
       if (cpuChoice) await session.stream.write(">p2 " + cpuChoice);
       await this.waitFor(session, () =>
         session.done || session.requestVersion.p1 > p1Version,
         REQUEST_TIMEOUT_MS
       );
-      const logs = session.logs.slice(from).slice(0, 80);
+
+      const logs = session.logs.slice(from).slice(0, 100);
       const moveWasUsed = logs.some(line => {
         const parts = String(line).split("|");
         return parts[1] === "move" && toID(parts[3]) === toID(moveId);
       });
+      const teraLine = logs.find(line => String(line).startsWith("|-terastallize|p1a"));
+      const teraApplied = !!teraLine;
+      const actualTeraType = teraLine ? String(teraLine).split("|")[3] || null : null;
+      const itemActivationLines = logs.filter(line =>
+        String(line).startsWith("|-item|") ||
+        String(line).startsWith("|-enditem|") ||
+        String(line).startsWith("|-activate|")
+      );
       const p1After = session.requests.p1?.side?.pokemon?.[0]?.condition || null;
       const p2After = session.requests.p2?.side?.pokemon?.[0]?.condition || null;
       return {
-        accepted: moveWasUsed && !session.error,
+        accepted: moveWasUsed && !session.error && (!wantsTera || teraApplied),
         moveWasUsed,
         moveId,
+        requestedTeraType,
+        teraExpected: wantsTera,
+        teraApplied,
+        actualTeraType,
+        heldItem: itemId || null,
+        itemActivationLines,
         before: {
           attacker: p1Request?.side?.pokemon?.[0]?.condition || null,
           target: p2Request?.side?.pokemon?.[0]?.condition || null
@@ -301,7 +334,6 @@ class Gen9BattleService {
       this.destroy(session.id);
     }
   }
-
   consume(session) {
     (async () => {
       try {
