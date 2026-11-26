@@ -561,7 +561,10 @@
   }
   async function resolveOnlineTurn(message) {
     const s = S();
-    if (!s.online?.isHost || !s.battle || s.battle.turnBusy) return;
+    if (!s.online?.isHost || !s.battle) return;
+    // Host marks its local action as waiting too; the second remote action
+    // must still be allowed to release the turn and enter the resolver.
+    s.battle.turnBusy = false;
     const actions = (message.actions || []).map((entry) => ({
       ...entry.action,
       side:entry.playerId === s.online.playerId ? "player" : "enemy"
