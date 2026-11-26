@@ -168,7 +168,9 @@ class Gen9BattleService {
     if (this.sessions.size >= MAX_SESSIONS) throw new Error("対戦サーバーが混み合っています。");
 
     const team1 = normalizeTeam(options.playerTeam);
-    const team2 = normalizeTeam(options.opponentTeam);
+    const team2 = options.opponentTeam ? normalizeTeam(options.opponentTeam) : Sim.Teams.getGenerator("gen9randombattle").getTeam();
+    const opponentValidation = new Sim.TeamValidator(FORMAT_ID).validateTeam(team2);
+    if (opponentValidation?.length) throw new Error("CPUチーム生成に失敗しました: " + opponentValidation.join("\n"));
     const stream = new Sim.BattleStream({ keepAlive: true });
     const session = {
       id: crypto.randomBytes(18).toString("hex"),
