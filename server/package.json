@@ -1,0 +1,16 @@
+{
+  "name": "pokemon-champions-online",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Room-code WebSocket relay and static host for the Pokémon Champions 2D fan prototype.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
