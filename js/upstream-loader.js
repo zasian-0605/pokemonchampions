@@ -209,7 +209,8 @@
       fetchedAt: new Date().toISOString(),
       sources: {
         moves: SHOWDOWN_MOVES_URL,
-        abilities: SHOWDOWN_ABILITIES_URL
+        abilities: SHOWDOWN_ABILITIES_URL,
+        items: SHOWDOWN_ITEMS_URL
       },
       audit: {
         moveCount: Object.keys(movesById).length,
@@ -244,7 +245,7 @@
   }
 
   window.POKEMON_CHAMPIONS_UPSTREAM_READY = (async () => {
-    setStatus("Pokémon Showdownから技・特性データを取得中…");
+    setStatus("Pokémon Showdownから技・特性・持ち物データを取得中…");
     try {
       const data = await fetchShowdownData();
       window.POKEMON_CHAMPIONS_UPSTREAM_MECHANICS = data;
@@ -256,7 +257,8 @@
       return {
         source: "pokemon-showdown-live",
         moves: data.audit.moveCount,
-        abilities: data.audit.abilityCount
+        abilities: data.audit.abilityCount,
+        items: data.audit.itemCount
       };
     } catch (remoteError) {
       console.warn("[data] Pokémon Showdown retrieval failed; trying bundled fallback.", remoteError);
