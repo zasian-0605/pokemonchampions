@@ -52,9 +52,10 @@ async function readBody(req, maxBytes) {
         return;
       }
       try {
+        const parsed = body ? JSON.parse(body) : {};
         if (settled) return;
         settled = true;
-        resolve(body ? JSON.parse(body) : {});
+        resolve(parsed);
       } catch (_) {
         fail(new Error("JSON形式が正しくありません。"));
       }
