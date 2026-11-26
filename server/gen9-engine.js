@@ -290,15 +290,18 @@ class Gen9BattleService {
 
       const from = session.logs.length;
       const p1Version = session.requestVersion.p1;
-      const doneBeforeChoice = session.done;
       const cpuChoice = this.chooseCpuAction(p2Request);
       const playerChoice = ">p1 move " + (moveIndex + 1) + (wantsTera ? " terastallize" : "");
       await session.stream.write(playerChoice);
       if (cpuChoice) await session.stream.write(">p2 " + cpuChoice);
-      await this.waitFor(session, () =>
-        session.done || session.requestVersion.p1 > p1Version,
-        REQUEST_TIMEOUT_MS
-      );
+      await this.waitFor(session, () => {
+        if (session.error) return true;
+        return session.logs.slice(from).some(line => {
+          const parts = String(line).split("|");
+          return parts[1] === "move" && parts[2]?.startsWith("p1a:") &&
+            toID(parts[3]) === toID(moveId);
+        });
+      }, REQUEST_TIMEOUT_MS);
 
       const logs = session.logs.slice(from).slice(0, 100);
       const moveWasUsed = logs.some(line => {
@@ -333,16 +336,6 @@ class Gen9BattleService {
         logs,
         error: session.error || null,
         battleEnded: !!session.done,
-        debug: {
-          logsStart: from,
-          logsEnd: session.logs.length,
-          requestVersionBefore: p1Version,
-          requestVersionAfter: session.requestVersion.p1,
-          doneBeforeChoice,
-          doneAfterChoice: session.done,
-          winner: session.winner,
-          lastLogs: session.logs.slice(-15)
-        }
       };
     } finally {
       this.destroy(session.id);
@@ -353,7 +346,6 @@ class Gen9BattleService {
       try {
         for await (const outputValue of session.stream) {
           const output = String(outputValue || "");
-          if (session.playerNames.p1 === "自動検証") console.log("[AUDIT_STREAM_CHUNK]", JSON.stringify(output));
           if (output.startsWith("update\n")) {
             const rawLines = output.slice(7).split("\n");
             const lines = [];
