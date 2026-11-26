@@ -101,6 +101,7 @@ async function main() {
       abilityId: "quarkdrive",
       heldItem: "boosterenergy",
       nature: "ひかえめ",
+      evs: { hp:1, atk:0, def:0, spa:0, spd:0, spe:0 },
       moves: ["fierydance", "sludgewave", "energyball", "uturn"]
     }],
     opponentTeam: [{
@@ -110,6 +111,7 @@ async function main() {
       abilityId: "quarkdrive",
       heldItem: "boosterenergy",
       nature: "ひかえめ",
+      evs: { hp:1, atk:0, def:0, spa:0, spd:0, spe:0 },
       moves: ["fierydance", "sludgewave", "energyball", "uturn"]
     }]
   });
