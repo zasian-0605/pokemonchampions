@@ -66,7 +66,7 @@ function normalizePokemon(raw, index) {
   for (const value of rawMoves) {
     const moveInput = typeof value === "string" ? value : value?.id || value?.name;
     const move = resolveEntry(Sim.Dex.moves, moveInput);
-    if (!move) continue;
+    if (!move) throw new Error(species.name + " の技「" + String(moveInput || "不明") + "」はShowdownの技データにありません。");
     if (!moves.includes(move.name)) moves.push(move.name);
     if (moves.length === 4) break;
   }
@@ -93,8 +93,14 @@ function normalizePokemon(raw, index) {
   const nature = resolveEntry(Sim.Dex.natures, natureInput) || Sim.Dex.natures.get("Serious");
   const ivs = cleanStats(raw.ivs, 31, 31);
   const evs = cleanStats(raw.evs, 252, 0);
-  const evTotal = Object.values(evs).reduce((sum, n) => sum + n, 0);
+  let evTotal = Object.values(evs).reduce((sum, n) => sum + n, 0);
   if (evTotal > 510) throw new Error(species.name + " の努力値合計が510を超えています。");
+  // Showdown rejects an all-zero EV spread in this format. One HP EV has no
+  // stat effect (EVs are divided by four), but makes the default team legal.
+  if (evTotal === 0) {
+    evs.hp = 1;
+    evTotal = 1;
+  }
 
   const allowedTera = new Set([
     "Normal","Fire","Water","Electric","Grass","Ice","Fighting","Poison","Ground",
