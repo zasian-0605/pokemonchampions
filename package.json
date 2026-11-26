@@ -3,9 +3,11 @@
   "version": "1.0.1",
   "private": true,
   "description": "Pokémon Champions 2D with server-authoritative National Dex battles",
-  "main": "server.js",
+  "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "test": "node server/test-gen9-engine.js",
+    "data:export": "node scripts/export-showdown-catalog.js"
   },
   "engines": {
     "node": ">=22.18.0"
