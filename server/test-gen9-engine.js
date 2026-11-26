@@ -46,8 +46,8 @@ async function main() {
   const zeroEvSession = service.get(zeroEvBattle.battleId, zeroEvBattle.token);
   assert.equal(zeroEvSession.teams.p1[0].evs.hp, 1, "all-zero EV spread should be normalized to 1 HP EV");
   assert.equal(service.destroy(zeroEvBattle.battleId), true);
-  assert.throws(
-    () => service.normalizeTeam([{species:"snorlax",moves:["not-a-real-move"]}]),
+  await assert.rejects(
+    () => service.createBattle({ playerTeam:[{species:"snorlax",moves:["not-a-real-move"]}] }),
     /技データにありません/
   );
 
