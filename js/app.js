@@ -69,6 +69,14 @@ function cloneShowdownValue(value){
  if(Array.isArray(value))return value.map(cloneShowdownValue);
  const out={};for(const [key,child] of Object.entries(value)){if(typeof child!=='function')out[key]=cloneShowdownValue(child);}return out;
 }
+function integrateUpstreamItems(data){
+ const remote=data?.upstreamMechanics?.itemsById||{};
+ const items=Object.entries(remote).map(([id,record])=>({id, ...(record||{})})).filter(item=>item.id&&item.name);
+ data.itemsById=remote;
+ data.itemsList=items;
+ data.itemsSource=Object.keys(remote).length?'pokemon-showdown-live':'none';
+ return {itemsAvailable:items.length};
+}
 function integrateUpstreamBattleData(data){
  const upstream=data.upstreamMechanics||{},remoteMoves=upstream.movesById||{},remoteApiMoves=upstream.movesByApiId||{};
  const localMoves=data.movesById||{},remoteMovesByNum=new Map();
@@ -191,7 +199,8 @@ async function loadAllData(){
  data.abilityNames=new Map(Object.entries(db.abilityNames||{}));
  data.abilityDesc=new Map(Object.entries(db.abilityDescriptions||{}));
  const upstreamStats=integrateUpstreamBattleData(data);
- data.upstreamSummary=upstreamStats;
+ const itemStats=integrateUpstreamItems(data);
+ data.upstreamSummary={...upstreamStats,...itemStats};
  const upstreamStatusNode=document.getElementById('upstream-fetch-status');
  if(upstreamStatusNode){
   if(upstreamStats.source==='pokemon-showdown-live')upstreamStatusNode.textContent=`Showdownライブ反映済み：技 ${upstreamStats.movesMatched}/${upstreamStats.movesAvailable}件・特性 ${upstreamStats.abilitiesMatched+upstreamStats.abilitiesAdded}/${upstreamStats.abilitiesAvailable}件`;
@@ -214,6 +223,7 @@ async function loadAllData(){
   japaneseMoveNames:Object.values(data.moves).filter(m=>m.jpName&&m.jpName!==m.name).length,
   learnsetCount:Object.keys(data.learnsets).length,learnsetSource:'pokemon_bulk_data.txt（内蔵）',
   learnsetMoveLinks:db.meta?.speciesMoveLinks||0,learnsetVersionGroups:[],moveSource:upstreamStats.source==='pokemon-showdown-live'?'Pokémon Showdown LIVE（対戦データ）＋内蔵日本語名':'内蔵技データ',
+  itemSource:itemStats.itemsAvailable?'Pokémon Showdown LIVE':'内蔵データ',
   dexSource:'pokemon_bulk_data.txt（内蔵）',abilityCount:data.abilitiesList.length,showdownAbilityCount:upstreamStats.abilitiesAvailable,showdownAbilityMatched:upstreamStats.abilitiesMatched+upstreamStats.abilitiesAdded,showdownAbilityCallbacks:upstreamStats.abilitiesWithCallbacks,typeCount:(db.types||[]).length
  };
  state.dataState='full';
