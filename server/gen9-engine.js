@@ -290,6 +290,7 @@ class Gen9BattleService {
 
       const from = session.logs.length;
       const p1Version = session.requestVersion.p1;
+      const doneBeforeChoice = session.done;
       const cpuChoice = this.chooseCpuAction(p2Request);
       const playerChoice = ">p1 move " + (moveIndex + 1) + (wantsTera ? " terastallize" : "");
       await session.stream.write(playerChoice);
@@ -331,7 +332,17 @@ class Gen9BattleService {
         after: { attacker: p1After, target: p2After },
         logs,
         error: session.error || null,
-        battleEnded: !!session.done
+        battleEnded: !!session.done,
+        debug: {
+          logsStart: from,
+          logsEnd: session.logs.length,
+          requestVersionBefore: p1Version,
+          requestVersionAfter: session.requestVersion.p1,
+          doneBeforeChoice,
+          doneAfterChoice: session.done,
+          winner: session.winner,
+          lastLogs: session.logs.slice(-15)
+        }
       };
     } finally {
       this.destroy(session.id);
