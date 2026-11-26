@@ -254,8 +254,8 @@ async function joinGen9Room(socket,payload) {
     room.actions=new Map();
     room.phase="active";
     room.turn=1;
-    send(p1.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p1",snapshot:p1Snapshot,opponent:player.name});
-    send(player.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p2",snapshot:p2Snapshot,opponent:p1.name});
+    send(p1.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p1",snapshot:p1Snapshot,playerName:p1.name,opponent:player.name});
+    send(player.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p2",snapshot:p2Snapshot,playerName:player.name,opponent:p1.name});
   } catch(error) {
     send(socket,{type:"error",message:error.message || "Showdown対戦を開始できませんでした。"});
     for(const p of room.players.values())send(p.socket,{type:"gen9-room-error",message:error.message || "Showdown対戦を開始できませんでした。"});
@@ -344,7 +344,7 @@ function handleMessage(socket, payload) {
     return;
   }
   if(type==="join-gen9-room") {
-    void joinGen9Room(socket,payload);
+    void joinGen9Room(socket,payload).catch(error=>send(socket,{type:"error",message:error.message || "第9世代ルームに参加できませんでした。"}));
     return;
   }
   if(type==="gen9-action") {
@@ -367,6 +367,7 @@ function handleMessage(socket, payload) {
       if(p)send(p.socket,{type:"gen9-forfeit-win"});
       const forfeiter=room.players.get(side);
       if(forfeiter)send(forfeiter.socket,{type:"gen9-forfeit-lost"});
+      if(room.battleId)gen9Service.destroy(room.battleId);
     }
     return;
   }
