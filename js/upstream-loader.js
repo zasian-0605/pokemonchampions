@@ -194,11 +194,12 @@
   }
 
   async function fetchShowdownData() {
-    const [movesById, rawAbilities, rawItems] = await Promise.all([
-      fetchMoves(),
-      loadAbilitiesScript(),
-      loadItemsScript()
-    ]);
+    // The generated ability/item scripts both write through the temporary window.exports
+    // bridge, so load those two scripts sequentially to avoid racing over that global.
+    const movesPromise = fetchMoves();
+    const rawAbilities = await loadAbilitiesScript();
+    const rawItems = await loadItemsScript();
+    const movesById = await movesPromise;
     const { abilitiesById, callbackCount } = normalizeAbilities(rawAbilities);
     const { itemsById, itemCallbackCount } = normalizeItems(rawItems);
 
