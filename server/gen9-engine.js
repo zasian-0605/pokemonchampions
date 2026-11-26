@@ -174,10 +174,13 @@ class Gen9BattleService {
 
     const skipValidation = options.skipValidation === true;
     const team1 = normalizeTeam(options.playerTeam, skipValidation);
-    const team2 = options.opponentTeam ? normalizeTeam(options.opponentTeam, skipValidation) : Sim.Teams.getGenerator("gen9randombattle").getTeam();
-    if (!skipValidation) {
+    const hasCustomOpponent = Array.isArray(options.opponentTeam) && options.opponentTeam.length > 0;
+    const team2 = hasCustomOpponent
+      ? normalizeTeam(options.opponentTeam, skipValidation)
+      : Sim.Teams.getGenerator("gen9randombattle").getTeam();
+    if (!skipValidation && hasCustomOpponent) {
       const opponentValidation = new Sim.TeamValidator(FORMAT_ID).validateTeam(team2);
-      if (opponentValidation?.length) throw new Error("CPUチーム生成に失敗しました: " + opponentValidation.join("\n"));
+      if (opponentValidation?.length) throw new Error("CPUチーム設定が全国図鑑ルールに適合しません: " + opponentValidation.join("\n"));
     }
     const stream = new Sim.BattleStream({ keepAlive: true });
     const session = {
