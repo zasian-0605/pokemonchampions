@@ -115,13 +115,15 @@ function normalizePokemon(raw, index) {
     teraType
   };
 }
-function normalizeTeam(input) {
+function normalizeTeam(input, skipValidation = false) {
   if (!Array.isArray(input) || input.length < 1 || input.length > 6) {
     throw new Error("チームは1〜6匹で編成してください。");
   }
   const team = input.map(normalizePokemon);
-  const errors = new Sim.TeamValidator(FORMAT_ID).validateTeam(team);
-  if (errors?.length) throw new Error("全国図鑑ルールで使えない設定があります:\n" + errors.join("\n"));
+  if (!skipValidation) {
+    const errors = new Sim.TeamValidator(FORMAT_ID).validateTeam(team);
+    if (errors?.length) throw new Error("全国図鑑ルールで使えない設定があります:\n" + errors.join("\n"));
+  }
   return team;
 }
 function makeCatalog() {
@@ -170,10 +172,13 @@ class Gen9BattleService {
     if (this.sessions.size >= MAX_SESSIONS) this.removeExpired();
     if (this.sessions.size >= MAX_SESSIONS) throw new Error("対戦サーバーが混み合っています。");
 
-    const team1 = normalizeTeam(options.playerTeam);
-    const team2 = options.opponentTeam ? normalizeTeam(options.opponentTeam) : Sim.Teams.getGenerator("gen9randombattle").getTeam();
-    const opponentValidation = new Sim.TeamValidator(FORMAT_ID).validateTeam(team2);
-    if (opponentValidation?.length) throw new Error("CPUチーム生成に失敗しました: " + opponentValidation.join("\n"));
+    const skipValidation = options.skipValidation === true;
+    const team1 = normalizeTeam(options.playerTeam, skipValidation);
+    const team2 = options.opponentTeam ? normalizeTeam(options.opponentTeam, skipValidation) : Sim.Teams.getGenerator("gen9randombattle").getTeam();
+    if (!skipValidation) {
+      const opponentValidation = new Sim.TeamValidator(FORMAT_ID).validateTeam(team2);
+      if (opponentValidation?.length) throw new Error("CPUチーム生成に失敗しました: " + opponentValidation.join("\n"));
+    }
     const stream = new Sim.BattleStream({ keepAlive: true });
     const session = {
       id: crypto.randomBytes(18).toString("hex"),
@@ -218,6 +223,82 @@ class Gen9BattleService {
     } catch (error) {
       this.destroy(session.id);
       throw error;
+    }
+  }
+
+  async runAuditCase(payload = {}) {
+    const speciesId = String(payload.speciesId || "mew");
+    const moveId = String(payload.moveId || "tackle");
+    const abilityId = String(payload.abilityId || "");
+    const itemId = String(payload.itemId || "");
+    const targetSpeciesId = String(payload.targetSpeciesId || "chansey");
+    const playerMon = {
+      species: speciesId,
+      name: String(payload.speciesName || speciesId),
+      moves: [moveId],
+      ability: abilityId,
+      item: itemId,
+      level: 100,
+      nature: "Serious",
+      ivs: {hp:31,atk:31,def:31,spa:31,spd:31,spe:31},
+      evs: {hp:0,atk:0,def:0,spa:0,spd:0,spe:0}
+    };
+    const targetMon = {
+      species: targetSpeciesId,
+      name: "検証用ターゲット",
+      moves: ["splash"],
+      ability: targetSpeciesId === "chansey" ? "naturalcure" : "",
+      level: 100,
+      nature: "Serious",
+      ivs: {hp:31,atk:31,def:31,spa:31,spd:31,spe:31},
+      evs: {hp:0,atk:0,def:0,spa:0,spd:0,spe:0}
+    };
+    const initial = await this.createBattle({
+      playerTeam: [playerMon],
+      opponentTeam: [targetMon],
+      player1Name: "自動検証",
+      player2Name: "検証用ターゲット",
+      kind: "cpu",
+      skipValidation: true
+    });
+    const session = this.sessions.get(initial.battleId);
+    if (!session) throw new Error("検証用バトルセッションを作成できませんでした。");
+    try {
+      const p1Request = session.requests.p1;
+      const p2Request = session.requests.p2;
+      const p1Moves = p1Request?.active?.[0]?.moves || [];
+      if (!p1Moves.length) throw new Error("Showdownから技の選択画面が返りませんでした。");
+      const from = session.logs.length;
+      const p1Version = session.requestVersion.p1;
+      const cpuChoice = this.chooseCpuAction(p2Request);
+      await session.stream.write(">p1 move 1");
+      if (cpuChoice) await session.stream.write(">p2 " + cpuChoice);
+      await this.waitFor(session, () =>
+        session.done || session.requestVersion.p1 > p1Version,
+        REQUEST_TIMEOUT_MS
+      );
+      const logs = session.logs.slice(from).slice(0, 80);
+      const moveWasUsed = logs.some(line => {
+        const parts = String(line).split("|");
+        return parts[1] === "move" && toID(parts[3]) === toID(moveId);
+      });
+      const p1After = session.requests.p1?.side?.pokemon?.[0]?.condition || null;
+      const p2After = session.requests.p2?.side?.pokemon?.[0]?.condition || null;
+      return {
+        accepted: moveWasUsed && !session.error,
+        moveWasUsed,
+        moveId,
+        before: {
+          attacker: p1Request?.side?.pokemon?.[0]?.condition || null,
+          target: p2Request?.side?.pokemon?.[0]?.condition || null
+        },
+        after: { attacker: p1After, target: p2After },
+        logs,
+        error: session.error || null,
+        battleEnded: !!session.done
+      };
+    } finally {
+      this.destroy(session.id);
     }
   }
 
