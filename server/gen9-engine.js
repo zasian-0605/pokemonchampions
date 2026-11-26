@@ -174,7 +174,7 @@ class Gen9BattleService {
     const stream = new Sim.BattleStream({ keepAlive: true });
     const session = {
       id: crypto.randomBytes(18).toString("hex"),
-      token: crypto.randomBytes(24).toString("hex"),
+      tokens: { p1: crypto.randomBytes(24).toString("hex"), p2: crypto.randomBytes(24).toString("hex") },
       kind: options.kind === "online" ? "online" : "cpu",
       stream,
       requests: { p1: null, p2: null },
@@ -224,7 +224,20 @@ class Gen9BattleService {
         for await (const outputValue of session.stream) {
           const output = String(outputValue || "");
           if (output.startsWith("update\n")) {
-            const lines = output.slice(7).split("\n").filter(line => line.startsWith("|"));
+            const rawLines = output.slice(7).split("\n");
+            const lines = [];
+            for (let i = 0; i < rawLines.length; i++) {
+              const line = rawLines[i];
+              if (line.startsWith("|split|")) {
+                i++;
+                if (i + 1 < rawLines.length) {
+                  const publicLine = rawLines[++i];
+                  if (publicLine.startsWith("|")) lines.push(publicLine);
+                }
+                continue;
+              }
+              if (line.startsWith("|")) lines.push(line);
+            }
             session.logs.push(...lines);
             if (session.logs.length > 600) session.logs.splice(0, session.logs.length - 600);
             for (const line of lines) {
@@ -299,9 +312,9 @@ class Gen9BattleService {
     });
   }
 
-  get(id, token) {
+  get(id, token, side = "p1") {
     const session = this.sessions.get(String(id || ""));
-    if (!session || session.token !== String(token || "")) throw new Error("対戦セッションが見つからないか、認証情報が違います。");
+    if (!session || session.tokens?.[side] !== String(token || "")) throw new Error("対戦セッションが見つからないか、認証情報が違います。");
     session.lastActive = Date.now();
     return session;
   }
@@ -312,7 +325,7 @@ class Gen9BattleService {
     const cursor = boundedInt(from, 0, session.logs.length, 0);
     return {
       battleId: session.id,
-      token: session.token,
+      token: session.tokens[side],
       format: FORMAT_ID,
       turn: Number(session.requests[side]?.rqid || 0),
       request: session.requests[side],
@@ -404,23 +417,39 @@ class Gen9BattleService {
     return this.snapshot(session, "p1", from);
   }
 
-  async submitOnlineTurn(id, token, actions, from = 0) {
-    const session = this.get(id, token);
+  validateAction(id, token, side, action) {
+    const session = this.get(id, token, side);
     if (session.kind !== "online") throw new Error("この対戦はオンライン対戦ではありません。");
-    if (session.done) return this.snapshot(session, "p1", from);
+    return this.buildChoice(session, side, action);
+  }
+
+  async submitOnlineTurn(id, p1Token, p2Token, actions, fromP1 = 0, fromP2 = 0) {
+    const session = this.get(id, p1Token, "p1");
+    this.get(id, p2Token, "p2");
+    if (session.kind !== "online") throw new Error("この対戦はオンライン対戦ではありません。");
+    if (session.done) return {
+      p1: this.snapshot(session, "p1", fromP1),
+      p2: this.snapshot(session, "p2", fromP2)
+    };
     const p1Version = session.requestVersion.p1;
+    const p2Version = session.requestVersion.p2;
     const p1Choice = this.buildChoice(session, "p1", actions.p1);
     const p2Choice = this.buildChoice(session, "p2", actions.p2);
     await session.stream.write(">p1 " + p1Choice);
     await session.stream.write(">p2 " + p2Choice);
     await this.waitFor(session, () =>
-      session.done || (session.requestVersion.p1 > p1Version && !!session.requests.p1 && !session.requests.p1.wait),
+      session.done || (
+        session.requestVersion.p1 > p1Version &&
+        session.requestVersion.p2 > p2Version &&
+        !!session.requests.p1 && !!session.requests.p2 &&
+        !session.requests.p1.wait && !session.requests.p2.wait
+      ),
       REQUEST_TIMEOUT_MS
     );
     session.lastActive = Date.now();
     return {
-      p1: this.snapshot(session, "p1", from),
-      p2: this.snapshot(session, "p2", from)
+      p1: this.snapshot(session, "p1", fromP1),
+      p2: this.snapshot(session, "p2", fromP2)
     };
   }
 
