@@ -289,7 +289,6 @@ class Gen9BattleService {
       }
 
       const from = session.logs.length;
-      const p1Version = session.requestVersion.p1;
       const cpuChoice = this.chooseCpuAction(p2Request);
       const playerChoice = ">p1 move " + (moveIndex + 1) + (wantsTera ? " terastallize" : "");
       await session.stream.write(playerChoice);
