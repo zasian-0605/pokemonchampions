@@ -15,7 +15,7 @@ async function main() {
     playerTeam: [{
       name: "Iron Moth",
       species: "ironmoth",
-      level: 50,
+      level: 100,
       abilityId: "quarkdrive",
       heldItem: "boosterenergy",
       nature: "ひかえめ",
@@ -97,7 +97,7 @@ async function main() {
     playerTeam: [{
       name: "Iron Moth A",
       species: "ironmoth",
-      level: 50,
+      level: 100,
       abilityId: "quarkdrive",
       heldItem: "boosterenergy",
       nature: "ひかえめ",
@@ -106,7 +106,7 @@ async function main() {
     opponentTeam: [{
       name: "Iron Moth B",
       species: "ironmoth",
-      level: 50,
+      level: 100,
       abilityId: "quarkdrive",
       heldItem: "boosterenergy",
       nature: "ひかえめ",
