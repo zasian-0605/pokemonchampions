@@ -995,9 +995,10 @@ function applyMoveSpecificEffects(actor,target,move,b){
  if(id==='torment'){foe.volatile=foe.volatile||{};foe.volatile.torment=true;}
  // Apply Showdown's declarative side-condition and pseudo-weather fields for moves
  // that are not already covered by the older move-ID handlers above.
- const sideCond=slug(move.sideCondition||'');
+ const sideCond=slug(move.sideCondition||''),moveApi=Number(move.apiId||0);
  const oldConditionMoveIds=new Set(['stealthrock','spikes','toxicspikes','stickyweb','reflect','lightscreen','auroraveil']);
- if(sideCond&&!oldConditionMoveIds.has(id)){
+ const oldConditionApiIds=new Set([446,191,390,564,115,113,694]);
+ if(sideCond&&!oldConditionMoveIds.has(id)&&!oldConditionApiIds.has(moveApi)){
   const ownTarget=['self','allyside','allies','usersfield','allpokemon'].includes(slug(move.target));
   const dest=ownTarget?ownCond:foeCond;
   if(sideCond==='spikes')dest.spikes=Math.min(3,Number(dest.spikes||0)+1);
@@ -1008,7 +1009,9 @@ function applyMoveSpecificEffects(actor,target,move,b){
   battleLog(ownTarget?'味方側に場の効果を展開した！':'相手側に場の効果を展開した！');
  }
  const pseudo=slug(move.pseudoWeather||'');
- if(pseudo){
+ const legacyPseudoApiIds=new Set([433,356,472,478]);
+ const legacyPseudoNames=new Set(['trickroom','gravity','wonderroom','magicroom']);
+ if(pseudo&&!legacyPseudoNames.has(id)&&!legacyPseudoApiIds.has(moveApi)){
   if(pseudo==='trickroom')b.trickRoomTurns=b.trickRoomTurns>0?0:5;
   else if(pseudo==='wonderroom')b.wonderRoomTurns=b.wonderRoomTurns>0?0:5;
   else if(pseudo==='magicroom')b.magicRoomTurns=b.magicRoomTurns>0?0:5;
@@ -1016,7 +1019,7 @@ function applyMoveSpecificEffects(actor,target,move,b){
   else b[pseudo+'Turns']=5;
   battleLog('場の特殊効果が変化した！');
  }
- if(move.forceSwitch&&foe!==self&&!['roar','whirlwind','dragontail','circlethrow'].includes(id)&&typeof v170ForceSwitch==='function')v170ForceSwitch(foe,b);
+ if(move.forceSwitch&&foe!==self&&!['roar','whirlwind','dragontail','circlethrow'].includes(id)&&![509,525].includes(moveApi)&&typeof v170ForceSwitch==='function')v170ForceSwitch(foe,b);
  if(id==='roar'||id==='whirlwind'||id==='dragontail'||id==='circlethrow'){const team=actor===b.playerTeam?.[0]?'enemy':(b.playerTeam.some(m=>m.uid===foe.uid)?'player':'enemy');const t=team==='player'?b.playerTeam:b.enemyTeam,active=team==='player'?b.playerActive:b.enemyActive;const ix=t.findIndex(m=>m.uid===foe.uid);const next=t.findIndex((m,i)=>i!==ix&&!m.fainted&&m.hp>0&&!active.includes(i));if(next>=0){const slot=active.indexOf(ix);if(slot>=0)active[slot]=next;triggerEntryEffects([t[next]],team==='player'?activeLiving(b.enemyTeam,b.enemyActive):activeLiving(b.playerTeam,b.playerActive),b);battleLog(`${foe.name}は吹き飛ばされた！`);}}
 }
 function applyMoveExtras(actor,target,move,b){if(move.weather)applyWeather(move.weather,b);if(move.id==='rest'){actor.status=null;actor.statusTurns=0;actor.hp=actor.maxhp;setStatus(actor,'slp',getMoveName(move));actor.statusTurns=0;battleLog(`${actor.name}は眠ってHPを全回復した！`);return;}if(move.status)setStatus(target,move.status,getMoveName(move));if(move.volatileStatus){target.volatile=target.volatile||{};target.volatile[move.volatileStatus]=true;battleLog(`${target.name}に${move.volatileStatus}の効果！`);}if(move.boosts)applyBoosts((move.target==='self'||['self','allySide'].includes(move.target))?actor:target,move.boosts,getMoveName(move));if(move.self?.boosts)applyBoosts(actor,move.self.boosts,getMoveName(move));if(move.heal&&Array.isArray(move.heal)){const heal=Math.max(1,Math.floor(actor.maxhp*move.heal[0]/move.heal[1]));actor.hp=Math.min(actor.maxhp,actor.hp+heal);battleLog(`${actor.name}はHPを${heal}回復した！`);}if(move.id==='protect'){actor.volatile.protected=true;battleLog(`${actor.name}は身を守った！`);}if(move.terrain)applyTerrain(move.terrain,b);if(move.id==='electricterrain')applyTerrain('electric',b);if(move.id==='grassyterrain')applyTerrain('grassy',b);if(move.id==='psychicterrain')applyTerrain('psychic',b);if(move.id==='mistyterrain')applyTerrain('misty',b);if(!move.weather&&move.id==='raindance')applyWeather('rain',b);if(!move.weather&&move.id==='sunnyday')applyWeather('sun',b);if(!move.weather&&move.id==='sandstorm')applyWeather('sand',b);if(!move.weather&&(move.id==='snowscape'||move.id==='hail'))applyWeather('snow',b);if(move.id==='thunderwave'&&!move.status)setStatus(target,'par',getMoveName(move));if(move.id==='willowisp'&&!move.status)setStatus(target,'brn',getMoveName(move));if(move.id==='toxic'&&!move.status)setStatus(target,'tox',getMoveName(move));if(move.id==='swordsdance'&&!move.boosts)applyBoosts(actor,{atk:2});if(move.id==='nastyplot'&&!move.boosts)applyBoosts(actor,{spa:2});if(move.id==='calmmind'&&!move.boosts)applyBoosts(actor,{spa:1,spd:1});if(move.id==='agility'&&!move.boosts)applyBoosts(actor,{spe:2});if(!move.heal&&(move.id==='recover'||move.id==='roost'||move.id==='slackoff'||move.id==='milkdrink'||move.id==='softboiled'||move.id==='synthesis'||move.id==='moonlight'||move.id==='morningsun')){const heal=Math.max(1,Math.floor(actor.maxhp*(b.weather==='sun'&&['synthesis','moonlight','morningsun'].includes(move.id)?2/3:1/2)));actor.hp=Math.min(actor.maxhp,actor.hp+heal);battleLog(`${actor.name}はHPを${heal}回復した！`);}const seconds=slug(actor.abilityId)==='sheerforce'?[]:[...(move.secondaries||[]),...(move.secondary?[move.secondary]:[])];for(const sec of seconds){const chance=Math.min(100,Number(sec.chance??100)*(slug(actor.abilityId)==='serenegrace'?2:1));if(Math.random()*100>chance)continue;const recipient=sec.self?actor:target;if(sec.status)setStatus(recipient,sec.status,getMoveName(move));if(sec.boosts)applyBoosts(recipient,sec.boosts,getMoveName(move));if(sec.volatileStatus){recipient.volatile=recipient.volatile||{};recipient.volatile[sec.volatileStatus]=true;}}}
