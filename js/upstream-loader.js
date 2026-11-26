@@ -7,6 +7,7 @@
 
   const SHOWDOWN_MOVES_URL = "https://play.pokemonshowdown.com/data/moves.json";
   const SHOWDOWN_ABILITIES_URL = "https://play.pokemonshowdown.com/data/abilities.js";
+  const SHOWDOWN_ITEMS_URL = "https://play.pokemonshowdown.com/data/items.js";
   const statusNode = document.getElementById("upstream-fetch-status");
   const REQUEST_TIMEOUT_MS = 15000;
 
@@ -59,27 +60,21 @@
     }
   }
 
-  function loadAbilitiesScript() {
+  function loadShowdownGlobalScript(exportName, sourceUrl) {
     return new Promise((resolve, reject) => {
       const previousExports = window.exports;
-      const previousAbilities = window.BattleAbilities;
+      const previousValue = window[exportName];
       const script = document.createElement("script");
       let finished = false;
 
       function restoreGlobals() {
-        if (typeof previousExports === "undefined") {
-          delete window.exports;
-        } else {
-          window.exports = previousExports;
-        }
-        if (typeof previousAbilities === "undefined") {
-          delete window.BattleAbilities;
-        } else {
-          window.BattleAbilities = previousAbilities;
-        }
+        if (typeof previousExports === "undefined") delete window.exports;
+        else window.exports = previousExports;
+        if (typeof previousValue === "undefined") delete window[exportName];
+        else window[exportName] = previousValue;
       }
 
-      function finish(error, abilities) {
+      function finish(error, value) {
         if (finished) return;
         finished = true;
         clearTimeout(timeout);
@@ -88,32 +83,37 @@
         script.remove();
         restoreGlobals();
         if (error) reject(error);
-        else resolve(abilities);
+        else resolve(value);
       }
 
       const timeout = setTimeout(() => {
-        finish(new Error("Showdown abilities.js timed out"));
+        finish(new Error("Showdown " + exportName + " timed out"));
       }, REQUEST_TIMEOUT_MS);
 
-      // Showdown's generated data file writes exports.BattleAbilities.
-      // Match the global export bridge used by the official Showdown client.
+      // Generated Showdown data scripts assign their export to exports.<name>.
       window.exports = window;
       script.async = true;
       script.crossOrigin = "anonymous";
-      script.src = SHOWDOWN_ABILITIES_URL + '?cacheBust=' + Date.now();
+      script.src = sourceUrl + "?cacheBust=" + Date.now();
       script.onload = () => {
-        const abilities = window.BattleAbilities;
-        if (!abilities || typeof abilities !== "object" || Array.isArray(abilities)) {
-          finish(new Error("Showdown ability data was not exported"));
+        const value = window[exportName];
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+          finish(new Error("Showdown " + exportName + " was not exported"));
           return;
         }
-        finish(null, abilities);
+        finish(null, value);
       };
-      script.onerror = () => {
-        finish(new Error("Could not load Showdown abilities.js"));
-      };
+      script.onerror = () => finish(new Error("Could not load " + sourceUrl));
       document.head.appendChild(script);
     });
+  }
+
+  function loadAbilitiesScript() {
+    return loadShowdownGlobalScript("BattleAbilities", SHOWDOWN_ABILITIES_URL);
+  }
+
+  function loadItemsScript() {
+    return loadShowdownGlobalScript("BattleItems", SHOWDOWN_ITEMS_URL);
   }
 
   function copyStaticData(value, path, callbackPaths, seen) {
@@ -148,6 +148,26 @@
     return output;
   }
 
+  function normalizeItems(raw) {
+    const itemsById = {};
+    let itemCallbackCount = 0;
+
+    for (const [key, record] of Object.entries(raw)) {
+      const id = toId(key);
+      if (!id || !record || typeof record !== "object") continue;
+      const callbackPaths = [];
+      const staticData = copyStaticData(record, "", callbackPaths, new WeakSet());
+      itemCallbackCount += callbackPaths.length;
+      itemsById[id] = { id, ...staticData, callbackPaths };
+    }
+
+    const count = Object.keys(itemsById).length;
+    if (count < 100) {
+      throw new Error("Showdown item data is incomplete (" + count + " entries)");
+    }
+    return { itemsById, itemCallbackCount };
+  }
+
   function normalizeAbilities(raw) {
     const abilitiesById = {};
     let callbackCount = 0;
@@ -174,11 +194,13 @@
   }
 
   async function fetchShowdownData() {
-    const [movesById, rawAbilities] = await Promise.all([
+    const [movesById, rawAbilities, rawItems] = await Promise.all([
       fetchMoves(),
-      loadAbilitiesScript()
+      loadAbilitiesScript(),
+      loadItemsScript()
     ]);
     const { abilitiesById, callbackCount } = normalizeAbilities(rawAbilities);
+    const { itemsById, itemCallbackCount } = normalizeItems(rawItems);
 
     return {
       schemaVersion: "2.0.0",
@@ -191,11 +213,14 @@
       audit: {
         moveCount: Object.keys(movesById).length,
         abilityCount: Object.keys(abilitiesById).length,
+        itemCount: Object.keys(itemsById).length,
         abilityCallbackPaths: callbackCount,
+        itemCallbackPaths: itemCallbackCount,
         callbacksExecuted: 0
       },
       movesById,
-      abilitiesById
+      abilitiesById,
+      itemsById
     };
   }
 
@@ -225,7 +250,7 @@
       window.POKEMON_CHAMPIONS_UPSTREAM_SOURCE = "pokemon-showdown-live";
       setStatus(
         "Showdown取得成功：技 " + data.audit.moveCount +
-        "件・特性 " + data.audit.abilityCount + "件"
+        "件・特性 " + data.audit.abilityCount + "件・持ち物 " + data.audit.itemCount + "件"
       );
       return {
         source: "pokemon-showdown-live",
@@ -242,11 +267,12 @@
           Object.keys(data.movesById || data.movesByApiId || {}).length;
         const abilities = data.audit?.pokeApiAbilityRows ??
           Object.keys(data.abilitiesById || {}).length;
+        const items = Object.keys(data.itemsById || {}).length;
         setStatus(
           "Showdown取得不可：同梱補助データに切替（技 " +
           moves + "件・特性 " + abilities + "件）"
         );
-        return { source: "local-fallback", moves, abilities, error: String(remoteError) };
+        return { source: "local-fallback", moves, abilities, items, error: String(remoteError) };
       } catch (fallbackError) {
         window.POKEMON_CHAMPIONS_UPSTREAM_MECHANICS = null;
         window.POKEMON_CHAMPIONS_UPSTREAM_SOURCE = "unavailable";
