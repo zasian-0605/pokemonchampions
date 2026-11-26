@@ -2,7 +2,7 @@
   "name": "pokemonchampions",
   "version": "1.0.1",
   "private": true,
-  "description": "Pokémon Champions 2D with server-authoritative Generation 9 Showdown battles",
+  "description": "Pokémon Champions 2D with server-authoritative National Dex battles",
   "main": "server.js",
   "scripts": {
     "start": "node server/index.js"
