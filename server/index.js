@@ -174,8 +174,9 @@ function detach(socket, reason) {
     const gameRoom = gen9Rooms.get(state.gen9RoomCode);
     clients.set(socket,{});
     if (gameRoom) {
-      const player = gameRoom.players.get(state.playerId);
-      if (player) gameRoom.players.delete(state.playerId);
+      for (const [side,player] of gameRoom.players.entries()) {
+        if(player.id===state.playerId)gameRoom.players.delete(side);
+      }
       gameRoom.lastActive = Date.now();
       for (const peer of gameRoom.players.values()) {
         send(peer.socket,{type:"gen9-peer-left",reason:reason || "disconnect"});
