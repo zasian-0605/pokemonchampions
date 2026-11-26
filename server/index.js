@@ -40,7 +40,15 @@ function readJson(req, maxBytes = 1024 * 1024) {
 async function handleGen9Api(req, res, url) {
   try {
     if (req.method === "GET" && url.pathname === "/api/gen9/health") {
-      return sendJson(res, 200, { ok:true, engine:"pokemon-showdown", format:FORMAT_ID, generation:9 });
+      return sendJson(res, 200, {
+        ok:true,
+        engine:"pokemon-showdown",
+        format:FORMAT_ID,
+        generation:9,
+        generationRange:"1-9",
+        dex:"National Dex",
+        mechanics:{megaEvolution:true,dynamax:false,terastallization:true}
+      });
     }
     if (req.method === "GET" && url.pathname === "/api/gen9/catalog") {
       return sendJson(res, 200, gen9Service.catalog());
@@ -77,9 +85,9 @@ async function handleGen9Api(req, res, url) {
       gen9Service.destroy(battleMatch[1]);
       return sendJson(res, 200, { ok:true });
     }
-    return sendJson(res, 404, { error:"Gen 9 API endpoint not found." });
+    return sendJson(res, 404, { error:"National Dex API endpoint not found." });
   } catch (error) {
-    return sendJson(res, 400, { error:error?.message || "Gen 9 API error." });
+    return sendJson(res, 400, { error:error?.message || "National Dex API error." });
   }
 }
 
