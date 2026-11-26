@@ -5,6 +5,83 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { WebSocketServer, WebSocket } = require("ws");
+const { Gen9BattleService, FORMAT_ID } = require("./gen9-engine");
+const gen9Service = new Gen9BattleService();
+
+function sendJson(res, status, value) {
+  const body = JSON.stringify(value);
+  res.writeHead(status, {
+    "Content-Type":"application/json; charset=utf-8",
+    "Cache-Control":"no-store",
+    "X-Content-Type-Options":"nosniff"
+  });
+  res.end(body);
+}
+function readJson(req, maxBytes = 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    let size = 0;
+    req.on("data", chunk => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        reject(new Error("リクエストが大きすぎます。"));
+        req.destroy();
+        return;
+      }
+      body += chunk.toString("utf8");
+    });
+    req.on("end", () => {
+      try { resolve(body ? JSON.parse(body) : {}); }
+      catch (_) { reject(new Error("JSON形式が正しくありません。")); }
+    });
+    req.on("error", reject);
+  });
+}
+async function handleGen9Api(req, res, url) {
+  try {
+    if (req.method === "GET" && url.pathname === "/api/gen9/health") {
+      return sendJson(res, 200, { ok:true, engine:"pokemon-showdown", format:FORMAT_ID, generation:9 });
+    }
+    if (req.method === "GET" && url.pathname === "/api/gen9/catalog") {
+      return sendJson(res, 200, gen9Service.catalog());
+    }
+    if (req.method === "POST" && url.pathname === "/api/gen9/battles") {
+      const body = await readJson(req);
+      const snapshot = await gen9Service.createBattle({
+        playerTeam:body.playerTeam,
+        opponentTeam:body.opponentTeam,
+        player1Name:body.playerName || "プレイヤー",
+        player2Name:body.opponentName || "CPU",
+        kind:"cpu"
+      });
+      return sendJson(res, 201, snapshot);
+    }
+    const actionMatch = url.pathname.match(/^\/api\/gen9\/battles\/([a-f0-9]+)\/action$/);
+    if (req.method === "POST" && actionMatch) {
+      const body = await readJson(req);
+      const snapshot = await gen9Service.submitCpuAction(
+        actionMatch[1], body.token, body.action || {}, body.cursor || 0
+      );
+      return sendJson(res, 200, snapshot);
+    }
+    const battleMatch = url.pathname.match(/^\/api\/gen9\/battles\/([a-f0-9]+)$/);
+    if (req.method === "GET" && battleMatch) {
+      const token = url.searchParams.get("token");
+      const cursor = Number(url.searchParams.get("cursor") || 0);
+      const session = gen9Service.get(battleMatch[1], token);
+      return sendJson(res, 200, gen9Service.snapshot(session, "p1", cursor));
+    }
+    if (req.method === "DELETE" && battleMatch) {
+      const token = url.searchParams.get("token");
+      gen9Service.get(battleMatch[1], token);
+      gen9Service.destroy(battleMatch[1]);
+      return sendJson(res, 200, { ok:true });
+    }
+    return sendJson(res, 404, { error:"Gen 9 API endpoint not found." });
+  } catch (error) {
+    return sendJson(res, 400, { error:error?.message || "Gen 9 API error." });
+  }
+}
 
 const ROOT = path.resolve(__dirname, "..");
 const PORT = Number(process.env.PORT || 10000);
@@ -271,6 +348,11 @@ function handleMessage(socket, payload) {
 }
 
 const server = http.createServer((req,res) => {
+  const requestUrl = new URL(req.url || "/", "http://localhost");
+  if (requestUrl.pathname.startsWith("/api/gen9/")) {
+    void handleGen9Api(req, res, requestUrl);
+    return;
+  }
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.writeHead(405,{"Content-Type":"text/plain; charset=utf-8","Allow":"GET, HEAD"});
     res.end("Method Not Allowed");
@@ -350,6 +432,7 @@ wss.on("connection",(socket) => {
 
 const cleanup = setInterval(() => {
   const now = Date.now();
+  gen9Service.removeExpired();
   for (const room of rooms.values()) {
     if (now - room.lastActive > ROOM_TTL_MS) {
       broadcast(room,{type:"error",message:"ルームの有効期限が切れました。"});
