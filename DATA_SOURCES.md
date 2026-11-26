@@ -8,6 +8,14 @@
 - 既存の日本語名・日本語説明・習得技・バトル処理は書き換えていない。
 - Showdownのコールバック関数本体や英語説明文は取り込まず、数値・フラグ・効果オブジェクト・コールバック名のみを収録。
 
+## 保存済みShowdownカタログ
+
+- `data/showdown-catalog.json` に、現在の `pokemon-showdown@0.11.11` から生成したカタログのスナップショットを保存。
+- 収録内容は技・特性・持ち物・ポケモンの一覧と表示用メタデータ。生成時のスキーマ版、依存バージョン、生成日時、件数を持つ。
+- `server/gen9-engine.js` はこのファイルをカタログAPIと監査計画に使用する。ファイルが欠損・不整合の場合は、インストール済みShowdownのDexから再生成する。
+- 実際のダメージ計算・技処理・特性・持ち物の発動は、引き続きサーバーの `pokemon-showdown` パッケージが行う。JSON内の説明文やメタデータだけで効果を実行するわけではない。
+- 再生成コマンド：`npm run data:export`。GitHub Actionsの `Refresh Showdown catalogue` ワークフローでも更新する。
+
 ## PokeAPI
 
 リポジトリ：[PokeAPI/pokeapi](https://github.com/PokeAPI/pokeapi)
