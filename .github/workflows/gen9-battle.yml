@@ -1,0 +1,19 @@
+name: Generation 9 battle engine
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gen9-showdown-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.18.0"
+      - name: Install battle simulator
+        run: npm install --prefix server
+      - name: Run Generation 9 simulator smoke test
+        run: npm test --prefix server
