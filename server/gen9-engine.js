@@ -342,6 +342,7 @@ class Gen9BattleService {
       try {
         for await (const outputValue of session.stream) {
           const output = String(outputValue || "");
+          if (session.playerNames.p1 === "自動検証") console.log("[AUDIT_STREAM_CHUNK]", JSON.stringify(output));
           if (output.startsWith("update\n")) {
             const rawLines = output.slice(7).split("\n");
             const lines = [];
