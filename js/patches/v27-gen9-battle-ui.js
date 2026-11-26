@@ -203,12 +203,15 @@
     }catch(e){errorText=e.message||String(e);busy=false;repaint();}
   }
   async function start(){
-    const playerTeam=buildTeam();
-    if(!playerTeam.length)throw new Error("先にポケモンをスカウトしてください。");
-    if(playerTeam.some(m=>!m.moves.length))throw new Error("技を覚えていないポケモンがいます。先に技を設定してください。");
-    team=selectedOwned();busy=true;errorText="";repaint();
-    try{const x=await api("/battles",{method:"POST",body:JSON.stringify({playerTeam,playerName:"プレイヤー"})});session={...x,logs:x.logs||[],playerName:"プレイヤー"};tera=false;}
-    catch(e){errorText=e.message||String(e);}
+    errorText="";
+    try{
+      const playerTeam=buildTeam();
+      if(!playerTeam.length)throw new Error("先にポケモンをスカウトしてください。");
+      if(playerTeam.some(m=>!m.moves.length))throw new Error("技を覚えていないポケモンがいます。先に技を設定してください。");
+      team=selectedOwned();busy=true;repaint();
+      const x=await api("/battles",{method:"POST",body:JSON.stringify({playerTeam,playerName:"プレイヤー"})});
+      session={...x,logs:x.logs||[],playerName:"プレイヤー"};tera=false;
+    }catch(e){errorText=e.message||String(e);}
     finally{busy=false;repaint();}
   }
   async function act(action){
