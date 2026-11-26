@@ -7,4 +7,4 @@ services:
     buildCommand: npm --prefix server install
     startCommand: npm --prefix server start
     healthCheckPath: /health
-    autoDeploy: true
+    autoDeployTrigger: commit
