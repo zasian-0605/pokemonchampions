@@ -64,6 +64,11 @@ function searchKey(s){return String(s??'').normalize('NFKC').toLocaleLowerCase()
 function setLoad(pct,msg){const bar=$('#loadbar'),st=$('#loadstatus');if(bar)bar.style.width=`${pct}%`;if(st)st.textContent=msg;}
 const OFFLINE_DATABASE=window.POKEMON_CHAMPIONS_OFFLINE_DATA||JSON.parse($('#offline-data')?.textContent||'{}');
 async function loadAllData(){
+ const upstreamReady=window.POKEMON_CHAMPIONS_UPSTREAM_READY;
+ if(upstreamReady){
+  setLoad(5,'Pokémon Showdownから技・特性データを取得中…');
+  await upstreamReady;
+ }
  const db=OFFLINE_DATABASE;
  if(!db||!Array.isArray(db.dex)||db.dex.length<1000||!db.moves||Object.keys(db.moves).length<700)throw new Error('HTML内蔵データを読み込めません。ファイルが完全に保存されているか確認してください。');
  setLoad(12,'HTML内蔵の全国図鑑データを整理中…');
@@ -76,15 +81,14 @@ async function loadAllData(){
  setLoad(34,'技・追加効果・習得技を接続中…');
  data.moves=db.moves;
  data.movesById=db.moves;
- // Attach upstream reference data as nested metadata. It does not alter the active battle formulas.
+ // Store external reference metadata separately. Embedded records and battle formulas stay untouched.
  data.upstreamMechanics=window.POKEMON_CHAMPIONS_UPSTREAM_MECHANICS||null;
- data.upstreamSummary={movesAttached:0,abilitiesAttached:0};
- if(data.upstreamMechanics?.movesByApiId){
-  for(const move of Object.values(data.movesById)){
-   const source=data.upstreamMechanics.movesByApiId[String(move?.apiId??'')];
-   if(source){move.upstreamData=source;data.upstreamSummary.movesAttached++;}
-  }
- }
+ data.upstreamSource=window.POKEMON_CHAMPIONS_UPSTREAM_SOURCE||'none';
+ // Keep fetched reference data separate: do not modify embedded move/ability records.
+ data.upstreamSummary={
+  movesAvailable:Object.keys(data.upstreamMechanics?.movesById||data.upstreamMechanics?.movesByApiId||{}).length,
+  abilitiesAvailable:Object.keys(data.upstreamMechanics?.abilitiesById||{}).length
+ };
  data.moveAliases={...(db.moveAliases||{})};
  data.moveApiIdToKey=db.moveApiIdToKey||{};
  // Normalize lookup aliases without changing the stored move records or learnset IDs.
@@ -107,13 +111,7 @@ async function loadAllData(){
  data.moveEffects=new Map(Object.values(db.moves).map(m=>[slug(m.id),m.mechanicDescription||'']));
  setLoad(58,'特性の日本語名・効果説明を接続中…');
  data.abilitiesList=db.abilities||[];
- if(data.upstreamMechanics?.abilitiesById){
-  for(const ability of data.abilitiesList){
-   const key=slug(ability?.id||ability?.slug||ability?.name||'');
-   const source=data.upstreamMechanics.abilitiesById[key];
-   if(source){ability.upstreamData=source;data.upstreamSummary.abilitiesAttached++;}
-  }
- }
+
  data.abilityNames=new Map(Object.entries(db.abilityNames||{}));
  data.abilityDesc=new Map(Object.entries(db.abilityDescriptions||{}));
  data.types=db.types||[];
