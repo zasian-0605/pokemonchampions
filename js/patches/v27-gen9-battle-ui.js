@@ -273,6 +273,23 @@
   },true);
   installNav();
   api("/health").then(data=>console.info("[v27] Gen 9 server ready",data)).catch(e=>console.warn("[v27] Gen 9 server unavailable",e));
+  api("/catalog").then(catalog=>{
+    const data=S()?.data;
+    if(!data||!Array.isArray(catalog.items))return;
+    const itemsById=Object.fromEntries(catalog.items.filter(item=>item?.id&&item?.name).map(item=>[item.id,item]));
+    data.showdownCatalog={itemsById,items:catalog.items};
+    data.itemsById=itemsById;
+    data.itemsList=catalog.items;
+    data.itemsSource="pokemon-showdown-server";
+    if(data.upstreamMechanics&&typeof data.upstreamMechanics==="object"){
+      data.upstreamMechanics.itemsById=itemsById;
+    }
+    const status=document.getElementById("upstream-fetch-status");
+    if(status&&!status.textContent.includes("持ち物")){
+      status.textContent += " · Showdown持ち物 "+catalog.items.length+"件";
+    }
+    console.info("[v27] Showdown item catalog loaded:",catalog.items.length);
+  }).catch(error=>console.warn("[v27] Showdown item catalog unavailable:",error));
   W.PokemonChampions2DGen9={version:"27.1.0",format:"gen9customgame",engine:"pokemon-showdown",open,createOnlineRoom,joinOnlineRoom};
   console.info("[v27] Generation 9 battle UI bridge loaded.");
 })();
