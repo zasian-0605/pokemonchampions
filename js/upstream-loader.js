@@ -1,202 +1,15 @@
-/* Direct retrieval test: move/ability reference data from Pokémon Showdown.
- * The embedded Pokédex, move catalogue, learnsets, Japanese text, and battle
- * formulas remain untouched. Remote records are stored separately as reference metadata.
+/* Local-only legacy metadata loader.
+ * Gen 9 battles use the server-side pokemon-showdown package and the committed
+ * data/showdown-catalog.json snapshot. This loader only attaches the bundled
+ * supplemental metadata used by the older browser-side prototype.
  */
 (() => {
   "use strict";
 
-  const SHOWDOWN_MOVES_URL = "https://play.pokemonshowdown.com/data/moves.json";
-  const SHOWDOWN_ABILITIES_URL = "https://play.pokemonshowdown.com/data/abilities.js";
   const statusNode = document.getElementById("upstream-fetch-status");
-  const REQUEST_TIMEOUT_MS = 15000;
 
   function setStatus(message) {
     if (statusNode) statusNode.textContent = message;
-  }
-
-  function toId(value) {
-    return String(value ?? "")
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]/g, "");
-  }
-
-  async function fetchMoves() {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    try {
-      const response = await fetch(SHOWDOWN_MOVES_URL, {
-        method: "GET",
-        mode: "cors",
-        cache: "no-store",
-        credentials: "omit",
-        signal: controller.signal
-      });
-      if (!response.ok) {
-        throw new Error("Showdown moves.json HTTP " + response.status);
-      }
-
-      const raw = await response.json();
-      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-        throw new Error("Showdown move data has an unexpected format");
-      }
-
-      const movesById = {};
-      for (const [key, value] of Object.entries(raw)) {
-        const id = toId(key);
-        if (!id || !value || typeof value !== "object") continue;
-        movesById[id] = { ...value, id };
-      }
-
-      const count = Object.keys(movesById).length;
-      if (count < 600) {
-        throw new Error("Showdown move data is incomplete (" + count + " entries)");
-      }
-      return movesById;
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
-  function loadAbilitiesScript() {
-    return new Promise((resolve, reject) => {
-      const previousExports = window.exports;
-      const previousAbilities = window.BattleAbilities;
-      const script = document.createElement("script");
-      let finished = false;
-
-      function restoreGlobals() {
-        if (typeof previousExports === "undefined") {
-          delete window.exports;
-        } else {
-          window.exports = previousExports;
-        }
-        if (typeof previousAbilities === "undefined") {
-          delete window.BattleAbilities;
-        } else {
-          window.BattleAbilities = previousAbilities;
-        }
-      }
-
-      function finish(error, abilities) {
-        if (finished) return;
-        finished = true;
-        clearTimeout(timeout);
-        script.onload = null;
-        script.onerror = null;
-        script.remove();
-        restoreGlobals();
-        if (error) reject(error);
-        else resolve(abilities);
-      }
-
-      const timeout = setTimeout(() => {
-        finish(new Error("Showdown abilities.js timed out"));
-      }, REQUEST_TIMEOUT_MS);
-
-      // Showdown's generated data file writes exports.BattleAbilities.
-      // Match the global export bridge used by the official Showdown client.
-      window.exports = window;
-      script.async = true;
-      script.crossOrigin = "anonymous";
-      script.src = SHOWDOWN_ABILITIES_URL + '?cacheBust=' + Date.now();
-      script.onload = () => {
-        const abilities = window.BattleAbilities;
-        if (!abilities || typeof abilities !== "object" || Array.isArray(abilities)) {
-          finish(new Error("Showdown ability data was not exported"));
-          return;
-        }
-        finish(null, abilities);
-      };
-      script.onerror = () => {
-        finish(new Error("Could not load Showdown abilities.js"));
-      };
-      document.head.appendChild(script);
-    });
-  }
-
-  function copyStaticData(value, path, callbackPaths, seen) {
-    if (typeof value === "function") {
-      callbackPaths.push(path || "(root)");
-      return undefined;
-    }
-    if (value === null || typeof value === "string" ||
-        typeof value === "number" || typeof value === "boolean") {
-      return value;
-    }
-    if (typeof value !== "object") return undefined;
-    if (seen.has(value)) return undefined;
-    seen.add(value);
-
-    if (Array.isArray(value)) {
-      return value.map((item, index) =>
-        copyStaticData(item, path + "[" + index + "]", callbackPaths, seen)
-      ).filter(item => item !== undefined);
-    }
-
-    const output = {};
-    for (const [key, child] of Object.entries(value)) {
-      const copied = copyStaticData(
-        child,
-        path ? path + "." + key : key,
-        callbackPaths,
-        seen
-      );
-      if (copied !== undefined) output[key] = copied;
-    }
-    return output;
-  }
-
-  function normalizeAbilities(raw) {
-    const abilitiesById = {};
-    let callbackCount = 0;
-
-    for (const [key, record] of Object.entries(raw)) {
-      const id = toId(key);
-      if (!id || !record || typeof record !== "object") continue;
-
-      const callbackPaths = [];
-      const staticData = copyStaticData(record, "", callbackPaths, new WeakSet());
-      callbackCount += callbackPaths.length;
-      abilitiesById[id] = {
-        id,
-        ...staticData,
-        callbackPaths
-      };
-    }
-
-    const count = Object.keys(abilitiesById).length;
-    if (count < 200) {
-      throw new Error("Showdown ability data is incomplete (" + count + " entries)");
-    }
-    return { abilitiesById, callbackCount };
-  }
-
-  async function fetchShowdownData() {
-    const [movesById, rawAbilities] = await Promise.all([
-      fetchMoves(),
-      loadAbilitiesScript()
-    ]);
-    const { abilitiesById, callbackCount } = normalizeAbilities(rawAbilities);
-
-    return {
-      schemaVersion: "2.0.0",
-      source: "pokemon-showdown",
-      fetchedAt: new Date().toISOString(),
-      sources: {
-        moves: SHOWDOWN_MOVES_URL,
-        abilities: SHOWDOWN_ABILITIES_URL
-      },
-      audit: {
-        moveCount: Object.keys(movesById).length,
-        abilityCount: Object.keys(abilitiesById).length,
-        abilityCallbackPaths: callbackCount,
-        callbacksExecuted: 0
-      },
-      movesById,
-      abilitiesById
-    };
   }
 
   function loadBundledFallback() {
@@ -207,56 +20,34 @@
         const data = window.POKEMON_CHAMPIONS_UPSTREAM_MECHANICS;
         if (!data || !data.abilitiesById ||
             (!data.movesById && !data.movesByApiId)) {
-          reject(new Error("bundled fallback metadata is incomplete"));
+          reject(new Error("同梱補助データの形式が正しくありません。"));
           return;
         }
         resolve(data);
       };
-      script.onerror = () => reject(new Error("bundled metadata could not be loaded"));
+      script.onerror = () => reject(new Error("同梱補助データを読み込めませんでした。"));
       document.head.appendChild(script);
     });
   }
 
   window.POKEMON_CHAMPIONS_UPSTREAM_READY = (async () => {
-    setStatus("Pokémon Showdownから技・特性データを取得中…");
+    setStatus("GitHubに保存された補助データを読み込み中…");
     try {
-      const data = await fetchShowdownData();
+      const data = await loadBundledFallback();
       window.POKEMON_CHAMPIONS_UPSTREAM_MECHANICS = data;
-      window.POKEMON_CHAMPIONS_UPSTREAM_SOURCE = "pokemon-showdown-live";
-      setStatus(
-        "Showdown取得成功：技 " + data.audit.moveCount +
-        "件・特性 " + data.audit.abilityCount + "件"
-      );
-      return {
-        source: "pokemon-showdown-live",
-        moves: data.audit.moveCount,
-        abilities: data.audit.abilityCount
-      };
-    } catch (remoteError) {
-      console.warn("[data] Pokémon Showdown retrieval failed; trying bundled fallback.", remoteError);
-      try {
-        const data = await loadBundledFallback();
-        window.POKEMON_CHAMPIONS_UPSTREAM_MECHANICS = data;
-        window.POKEMON_CHAMPIONS_UPSTREAM_SOURCE = "local-fallback";
-        const moves = data.audit?.pokeApiMoveRows ??
-          Object.keys(data.movesById || data.movesByApiId || {}).length;
-        const abilities = data.audit?.pokeApiAbilityRows ??
-          Object.keys(data.abilitiesById || {}).length;
-        setStatus(
-          "Showdown取得不可：同梱補助データに切替（技 " +
-          moves + "件・特性 " + abilities + "件）"
-        );
-        return { source: "local-fallback", moves, abilities, error: String(remoteError) };
-      } catch (fallbackError) {
-        window.POKEMON_CHAMPIONS_UPSTREAM_MECHANICS = null;
-        window.POKEMON_CHAMPIONS_UPSTREAM_SOURCE = "unavailable";
-        setStatus("補助データ取得失敗：内蔵ゲームデータのみで起動します");
-        return {
-          source: "unavailable",
-          error: String(remoteError),
-          fallbackError: String(fallbackError)
-        };
-      }
+      window.POKEMON_CHAMPIONS_UPSTREAM_SOURCE = "local-bundled";
+      const moves = data.audit?.pokeApiMoveRows ??
+        Object.keys(data.movesById || data.movesByApiId || {}).length;
+      const abilities = data.audit?.pokeApiAbilityRows ??
+        Object.keys(data.abilitiesById || {}).length;
+      setStatus("同梱データ読み込み成功：技 " + moves + "件・特性 " + abilities + "件");
+      return { source: "local-bundled", moves, abilities };
+    } catch (error) {
+      window.POKEMON_CHAMPIONS_UPSTREAM_MECHANICS = null;
+      window.POKEMON_CHAMPIONS_UPSTREAM_SOURCE = "unavailable";
+      setStatus("補助データを読み込めませんでした。内蔵ゲームデータで起動します。");
+      console.error("[data] bundled supplemental metadata failed:", error);
+      return { source: "unavailable", error: String(error) };
     }
   })();
 })();
