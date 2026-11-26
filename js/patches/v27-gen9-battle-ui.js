@@ -270,7 +270,12 @@
       team=selectedOwned();busy=true;repaint();
       const x=await api("/battles",{method:"POST",body:JSON.stringify({playerTeam,playerName:"プレイヤー"})});
       session={...x,logs:x.logs||[],playerName:"プレイヤー"};gimmick="";
-    }catch(e){errorText=e.message||String(e);}
+    }catch(e){
+      errorText=e.message||String(e);
+      diagnosticReport="対戦開始に失敗したため、自動診断を実行します…";
+      repaint();
+      void runDiagnostic();
+    }
     finally{busy=false;repaint();}
   }
   async function act(action){
