@@ -174,6 +174,7 @@ function handleMessage(socket, payload) {
     const team = sanitizeTeam(payload.team);
     const player = makePlayer(socket,payload.playerName,team);
     assignClient(socket,room,player);
+    send(socket,{type:"room-joined",roomCode:room.code,playerId:player.id});
     room.phase = "active";
     room.turn = 1;
     const players = Array.from(room.players.values()).map((p) => ({id:p.id,name:p.name,team:p.team}));
