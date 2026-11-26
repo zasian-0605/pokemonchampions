@@ -1,0 +1,41 @@
+name: Refresh Showdown catalogue
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "scripts/export-showdown-catalog.js"
+      - "server/gen9-engine.js"
+      - ".github/workflows/showdown-catalog.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  export-catalogue:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.18.0"
+          cache: npm
+      - name: Install root dependencies
+        run: npm install
+      - name: Export pinned Showdown catalogue
+        run: npm run data:export
+      - name: Commit updated snapshot and lockfile
+        run: |
+          git add data/showdown-catalog.json package-lock.json
+          if git diff --cached --quiet; then
+            echo "Catalogue and lockfile are already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Refresh pinned Showdown catalogue"
+          git push
