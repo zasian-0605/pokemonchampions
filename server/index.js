@@ -136,6 +136,46 @@ function safeStatBlock(value, keys, max) {
   }
   return out;
 }
+function sanitizeGen9Team(input) {
+  if (!Array.isArray(input) || input.length < 1 || input.length > MAX_TEAM_SIZE) {
+    throw new Error("チームは1〜6匹にしてください。");
+  }
+  return input.map((raw, index) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new Error("ポケモン " + (index + 1) + " のデータが不正です。");
+    }
+    const speciesId = safeSlug(raw.speciesId || raw.species,64);
+    const uid = safeString(raw.uid,96);
+    if (!speciesId || !uid) throw new Error("ポケモンIDが不正です。");
+
+    const rawMoves = raw.moves == null ? [] : raw.moves;
+    if (!Array.isArray(rawMoves)) throw new Error("技データは配列で送信してください。");
+    if (rawMoves.length > 4) throw new Error("技は4つまで設定できます。");
+    const moves = rawMoves.map((move, moveIndex) => {
+      const moveValue = typeof move === "string" ? move : move?.id || move?.name;
+      const moveId = safeString(moveValue,64);
+      if (!moveId) throw new Error("技 " + (moveIndex + 1) + " のIDが不正です。");
+      return {id:moveId};
+    });
+
+    return {
+      uid,
+      speciesId,
+      name:safeString(raw.name,48),
+      level:raw.level,
+      shiny:!!raw.shiny,
+      mark:raw.mark ? safeString(raw.mark,48) : null,
+      nature:raw.nature == null || raw.nature === "" ? "まじめ" : safeString(raw.nature,32),
+      ivs:raw.ivs,
+      evs:raw.evs,
+      abilityId:raw.abilityId == null ? raw.ability : raw.abilityId,
+      heldItem:raw.heldItem == null ? raw.item : raw.heldItem,
+      teraType:raw.teraType,
+      gender:raw.gender,
+      moves
+    };
+  });
+}
 function sanitizeTeam(input, allowPartial = false) {
   if (!Array.isArray(input) || input.length < 1 || input.length > MAX_TEAM_SIZE ||
       (!allowPartial && input.length !== MAX_TEAM_SIZE)) {
@@ -246,7 +286,7 @@ async function joinGen9Room(socket,payload) {
     send(socket,{type:"error",message:"その第9世代ルームは見つからないか、すでに満員です。"});
     return;
   }
-  const team=sanitizeTeam(payload.team,true);
+  const team=gen9Service.validateTeam(sanitizeGen9Team(payload.team));
   const player=makeGen9Player(socket,payload.playerName,team,"p2");
   assignGen9Client(socket,room,player);
   try {
@@ -345,7 +385,7 @@ function handleMessage(socket, payload) {
   const type = safeString(payload?.type,40);
   if(type==="create-gen9-room") {
     detach(socket,"replaced");
-    const team=sanitizeTeam(payload.team,true);
+    const team=gen9Service.validateTeam(sanitizeGen9Team(payload.team));
     const code=makeRoomCode();
     const player=makeGen9Player(socket,payload.playerName,team,"p1");
     const room={code,players:new Map(),phase:"waiting",battleId:null,tokens:null,actions:new Map(),cursors:{p1:0,p2:0},turn:1,createdAt:Date.now(),lastActive:Date.now(),resolving:false};
