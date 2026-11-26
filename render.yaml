@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: pokemonchampions-online
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm --prefix server install
+    startCommand: npm --prefix server start
+    healthCheckPath: /health
+    autoDeploy: true
