@@ -9,10 +9,13 @@ Showdown simulator package on the server.
 - `server/gen9-engine.js` — server-authoritative Showdown BattleStream,
   Generation 9 Custom Game team validation, team conversion, CPU actions,
   request handling, and battle snapshots.
-- `server/index.js` — HTTP API for the browser battle client, plus the
-  existing room/WebSocket relay.
-- `js/patches/v27-gen9-battle-ui.js` — Generation 9 battle screen; it submits
-  only selected actions to the server and renders the resulting Showdown log.
+- `server/index.js` — HTTP CPU-battle API and WebSocket room service for
+  server-authoritative player-vs-player battles. Per-player tokens keep each
+  side's private request data separate.
+- `js/patches/v27-gen9-battle-ui.js` — Generation 9 battle screen for CPU
+  matches and room-code online matches. It sends choices only; the server
+  calculates outcomes and returns public battle logs plus that player's own
+  choice request.
 - `js/offline-data.js` and `js/app.js` — existing Japanese display data,
   save data, collection, and box systems.
 
@@ -41,7 +44,13 @@ Open `http://localhost:10000`.
 - `POST /api/gen9/battles/:id/action` — submit a move or switch. Body:
   `{ "token": "...", "action": { "moveIndex": 0 } }`.
 - `GET /api/gen9/battles/:id?token=...` — read the current player snapshot.
-- `DELETE /api/gen9/battles/:id?token=...` — release a battle session.
+- `DELETE /api/gen9/battles/:id?token=...` — release a CPU battle session.
+
+Online PvP uses the existing `/ws` WebSocket endpoint with these messages:
+`create-gen9-room`, `join-gen9-room`, `gen9-action`,
+`leave-gen9-room`, and `gen9-forfeit`. Both players receive independent
+session tokens and side-specific choice requests; only public battle events
+are broadcast.
 
 ## Format notes
 
@@ -52,9 +61,9 @@ with no tournament banlist. Player teams are checked by Showdown's
 Unsupported species, items, abilities, or moves are rejected by validation.
 
 The Generation 9 screen is separate from the prototype's older battle and raid
-modes. Those older modes are still present and have not been converted to the
-Showdown simulator yet. Online player-vs-player battles are not yet connected
-to the new authoritative engine.
+modes. Those older modes remain available as legacy modes and have not been
+converted to the Showdown simulator. The new Generation 9 screen supports
+server-authoritative CPU and room-code player-vs-player battles.
 
 ## License
 
