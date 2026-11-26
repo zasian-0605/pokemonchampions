@@ -385,12 +385,6 @@ class Gen9BattleService {
     if (gimmick === "mega") {
       if (!active?.canMegaEvo) throw new Error("このポケモンはメガシンカできません。対応するメガストーンを確認してください。");
       gimmickCommand = " mega";
-    } else if (gimmick === "megax") {
-      if (!active?.canMegaEvoX) throw new Error("このポケモンはメガリザードンXにメガシンカできません。");
-      gimmickCommand = " megax";
-    } else if (gimmick === "megay") {
-      if (!active?.canMegaEvoY) throw new Error("このポケモンはメガリザードンYにメガシンカできません。");
-      gimmickCommand = " megay";
     } else if (gimmick === "terastallize") {
       if (!active?.canTerastallize) throw new Error("このポケモンはテラスタルできません。");
       gimmickCommand = " terastallize";
@@ -419,8 +413,6 @@ class Gen9BattleService {
     const active = request.active?.[0] || {};
     let gimmick = "";
     if (active.canMegaEvo && Math.random() < 0.25) gimmick = " mega";
-    else if (active.canMegaEvoX && Math.random() < 0.25) gimmick = " megax";
-    else if (active.canMegaEvoY && Math.random() < 0.25) gimmick = " megay";
     else if (active.canTerastallize && Math.random() < 0.35) gimmick = " terastallize";
     return "move " + (picked.index + 1) + gimmick;
   }
