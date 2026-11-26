@@ -270,13 +270,6 @@ class Gen9BattleService {
     const session = this.sessions.get(initial.battleId);
     if (!session) throw new Error("検証用バトルセッションを作成できませんでした。");
     try {
-      const initialDiagnostic = {
-        done: session.done,
-        logCount: session.logs.length,
-        initialLogs: session.logs.slice(-30),
-        p1Request: session.requests.p1,
-        p2Request: session.requests.p2
-      };
       const p1Request = session.requests.p1;
       const p2Request = session.requests.p2;
       const p1Moves = p1Request?.active?.[0]?.moves || [];
@@ -325,7 +318,6 @@ class Gen9BattleService {
         accepted: moveWasUsed && !session.error && (!wantsTera || teraApplied),
         moveWasUsed,
         moveId,
-        initialDiagnostic,
         requestedTeraType,
         teraExpected: wantsTera,
         teraApplied,
@@ -397,8 +389,6 @@ class Gen9BattleService {
                 }
               }
             }
-          } else if (output.startsWith("end\n")) {
-            session.done = true;
           }
           session.lastActive = Date.now();
           this.notify(session);
