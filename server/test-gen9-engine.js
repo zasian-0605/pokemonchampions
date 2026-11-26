@@ -39,6 +39,18 @@ async function main() {
   assert.ok(Array.isArray(first.request.active));
   assert.ok(first.request.active[0]?.moves?.length);
 
+
+  const zeroEvBattle = await service.createBattle({
+    playerTeam: [{ species:"snorlax", moves:["body-slam"], evs:{hp:0,atk:0,def:0,spa:0,spd:0,spe:0} }]
+  });
+  const zeroEvSession = service.get(zeroEvBattle.battleId, zeroEvBattle.token);
+  assert.equal(zeroEvSession.teams.p1[0].evs.hp, 1, "all-zero EV spread should be normalized to 1 HP EV");
+  assert.equal(service.destroy(zeroEvBattle.battleId), true);
+  assert.throws(
+    () => service.normalizeTeam([{species:"snorlax",moves:["not-a-real-move"]}]),
+    /技データにありません/
+  );
+
   const session = service.get(first.battleId, first.token);
   assert.equal(session.teams.p1[0].species, "Iron Moth");
   assert.equal(session.teams.p1[0].ability, "Quark Drive");
