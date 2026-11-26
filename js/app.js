@@ -70,11 +70,13 @@ function cloneShowdownValue(value){
  const out={};for(const [key,child] of Object.entries(value)){if(typeof child!=='function')out[key]=cloneShowdownValue(child);}return out;
 }
 function integrateUpstreamItems(data){
- const remote=data?.upstreamMechanics?.itemsById||{};
+ const live=data?.upstreamMechanics?.itemsById||{};
+ const catalog=data?.showdownCatalog?.itemsById||{};
+ const remote=Object.keys(live).length?live:catalog;
  const items=Object.entries(remote).map(([id,record])=>({id, ...(record||{})})).filter(item=>item.id&&item.name);
  data.itemsById=remote;
  data.itemsList=items;
- data.itemsSource=Object.keys(remote).length?'pokemon-showdown-live':'none';
+ data.itemsSource=Object.keys(live).length?'pokemon-showdown-live':Object.keys(catalog).length?'pokemon-showdown-server':'none';
  return {itemsAvailable:items.length};
 }
 function integrateUpstreamBattleData(data){
