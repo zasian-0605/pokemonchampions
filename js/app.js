@@ -4595,6 +4595,21 @@ const __V182_CORE_BRIDGE_NAMES = ["$", "$$", "GITHUB_SPRITES", "MEGA_GARCHOMP_FO
   try{Object.defineProperty(window,"animateCinematicPulse",{configurable:true,enumerable:false,get:()=>animateCinematicPulse,set:v=>{animateCinematicPulse=v;}});}catch(_e){}
   try{Object.defineProperty(window,"cinematicResultFromLogs",{configurable:true,enumerable:false,get:()=>cinematicResultFromLogs,set:v=>{cinematicResultFromLogs=v;}});}catch(_e){}
   try{Object.defineProperty(window,"executeTurn",{configurable:true,enumerable:false,get:()=>executeTurn,set:v=>{executeTurn=v;}});}catch(_e){}
+  // Stable battle-runtime bridge for isolated, load-after-app patches.
+  // Keep the internals private while exposing the shared calculations the CPU needs.
+  try{Object.defineProperty(window,"PokemonChampions2DBattleRuntime",{configurable:true,enumerable:false,value:Object.freeze({
+    getMove,calcStats,monSpecies,currentStat,typeMult,resolveContextMoveData,getEffectiveAccuracy,
+    isChargeMove:move=>V170_CHARGE_API.has(Number(move?.apiId||0)),
+    isSemiInvulnerableChargeMove:move=>V170_SEMI_INVULNERABLE_API.has(Number(move?.apiId||0)),
+    isRechargeMove:move=>V170_RECHARGE_API.has(Number(move?.apiId||0)),
+    skipsCharge:(move,actor,battle)=>{
+      const held=String(actor?.heldItem||"").toLowerCase();
+      const powerHerb=held==="powerherb"||held==="パワフルハーブ"||itemSlug(held)==="powerherb";
+      return powerHerb||(Number(move?.apiId||0)===76&&battle?.weather==="sun");
+    },
+    getBattle:()=>state.battle
+  })});}catch(_e){}
+
   try{Object.defineProperty(window,"findMegaForm",{configurable:true,enumerable:false,get:()=>findMegaForm,set:v=>{findMegaForm=v;}});}catch(_e){}
   try{Object.defineProperty(window,"megaEvolve",{configurable:true,enumerable:false,get:()=>megaEvolve,set:v=>{megaEvolve=v;}});}catch(_e){}
   try{Object.defineProperty(window,"openModal",{configurable:true,enumerable:false,get:()=>openModal,set:v=>{openModal=v;}});}catch(_e){}
