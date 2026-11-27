@@ -29,3 +29,5 @@ jobs:
         run: npm run data:export
       - name: Run Generation 9 simulator smoke test
         run: npm test
+      - name: Run browser Worker and fallback smoke tests
+        run: npm run test:browser-gen9
