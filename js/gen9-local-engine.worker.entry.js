@@ -291,20 +291,16 @@ async function createSession(playerTeam, opponentTeam, playerName, opponentName)
   };
 
   try {
+    session.phase = "プレイヤー・CPU登録とShowdown対戦開始";
+    // Pass both sides into the constructor together. BattleStream's start
+    // command does the same; emitting updates before both sides exist can
+    // make Battle.sendUpdates() try to emit a request for an empty side.
     session.battle = new Battle({
       formatid:FORMAT_ID,
+      p1:{name:session.playerName, team:playerTeam},
+      p2:{name:session.opponentName, team:opponentTeam},
       send:(type, data) => receiveBattleMessage(session, type, data)
     });
-
-    // Flush the initial Showdown log before registering the two players.
-    session.battle.sendUpdates();
-
-    session.phase = "プレイヤーチーム登録";
-    session.battle.setPlayer("p1", {name:session.playerName, team:playerTeam});
-    session.battle.sendUpdates();
-
-    session.phase = "CPUチーム登録・対戦開始";
-    session.battle.setPlayer("p2", {name:session.opponentName, team:opponentTeam});
     session.battle.sendUpdates();
 
     session.phase = "初期行動リクエスト取得";
