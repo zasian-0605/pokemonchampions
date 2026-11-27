@@ -10,7 +10,8 @@
     "data:export": "node scripts/export-showdown-catalog.js",
     "build:browser-gen9": "node scripts/build-browser-gen9.js",
     "postinstall": "node scripts/build-browser-gen9.js",
-    "test:browser-gen9": "node scripts/test-browser-gen9.js"
+    "test:browser-gen9": "node scripts/test-browser-gen9.js",
+    "test:battle-ui": "node scripts/test-battle-ui.js"
   },
   "engines": {
     "node": ">=22.18.0"

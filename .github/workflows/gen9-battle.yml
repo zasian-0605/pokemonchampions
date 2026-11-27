@@ -32,3 +32,5 @@ jobs:
         run: npm test
       - name: Run browser Worker and fallback smoke tests
         run: npm run test:browser-gen9
+      - name: Run compact battle UI smoke tests
+        run: npm run test:battle-ui
