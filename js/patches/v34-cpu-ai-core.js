@@ -441,11 +441,6 @@
       b._cpuSwitchReservations = [];
     }
     const reserved = new Set(b._cpuSwitchReservations || []);
-    const currentIncoming = bestMoveValue(
-      { moves: playerTargets.flatMap(member => member.moves || []), types: playerTargets[0].types },
-      [mon],
-      b
-    );
     let actualIncoming = { damage: 0, effectiveness: 1 };
     for (const attacker of playerTargets) {
       const threat = bestMoveValue(attacker, [mon], b);
@@ -466,11 +461,6 @@
           Number(candidate.maxhp || 1) <= 0) continue;
       if (Number(candidate.hp) / Number(candidate.maxhp) < 0.3) continue;
 
-      const incoming = bestMoveValue(
-        { moves: [], types: [] },
-        [candidate],
-        b
-      );
       let candidateIncoming = { damage: 0, effectiveness: 1 };
       for (const attacker of playerTargets) {
         const threat = bestMoveValue(attacker, [candidate], b);
