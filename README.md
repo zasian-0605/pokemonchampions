@@ -11,29 +11,56 @@ Generation 9 battle mode.
 - `js/upstream-mechanics.js` — supplemental reference metadata used by the
   older browser-side prototype. It does not contain executable Showdown
   battle callbacks.
-- `data/showdown-catalog.json` — committed, versioned catalogue snapshot
-  containing Showdown species, move, ability, and item records.
-- `server/gen9-engine.js` — server-authoritative Showdown BattleStream.
-  The snapshot is used for catalogue/UI data; the installed Showdown package
-  executes the actual battle mechanics.
-- `server/index.js` — the single HTTP and WebSocket server entry point.
-- `server/auto-audit.js` — memory-only audit job runner.
+- `data/showdown-catalog.json` — committed catalogue snapshot for species,
+  moves, abilities, and items used by the game's reference UI.
+- `js/patches/v27-gen9-battle-ui.js` — the National Dex battle screen and its
+  UI bridge. It owns presentation and input; it does not calculate battle
+  results.
+- `js/gen9-local-engine.worker.entry.js` — browser CPU battle runtime. It
+  loads the Showdown simulator, validates teams, generates the CPU team, and
+  advances each turn inside a Web Worker.
+- `scripts/build-browser-gen9.js` — bundles the worker with esbuild and
+  creates a gzip-compressed copy for browsers that support it.
+- `server/gen9-engine.js` — server-authoritative Showdown BattleStream used
+  for online PvP. The server validates both teams and resolves both players'
+  actions.
+- `server/index.js` — the HTTP server, static worker-bundle delivery, and
+  WebSocket room/matchmaking entry point.
+- `server/auto-audit.js` — server-side mechanics audit job runner.
 - `scripts/export-showdown-catalog.js` — rebuilds the committed catalogue
-  from the exact Showdown package version pinned in the root manifest.
+  from the pinned server-side Showdown package.
 
 The root `package.json` is the only dependency manifest used by Render and
-GitHub Actions. There is no separate server npm project.
+GitHub Actions. There is no separate server npm project. The `prestart`
+script builds the browser worker before the web server starts.
+
+## Battle architecture
+
+The National Dex screen uses two execution paths:
+
+- **CPU battles:** `@pkmn/sim` and `@pkmn/randoms` are bundled into a browser
+  Web Worker. Team validation, random CPU team generation, move selection,
+  damage calculation, abilities, held items, status, Mega Evolution, and
+  Terastallization are resolved locally. CPU turns do not call
+  `/api/gen9/battles`.
+- **Online PvP:** the browser uses the existing `/ws` WebSocket connection
+  for random matchmaking and private room codes. The server runs the battle
+  authoritatively, so both players see the same result and cannot decide
+  damage locally.
+
+The CPU and online paths use the same National Dex AG ruleset identifier:
+`gen9nationaldexag`. The browser simulator is a browser-compatible
+extraction of Pokémon Showdown; the online server currently retains the
+pinned `pokemon-showdown` package. Both paths are kept separate from the
+older collection-game battle and raid prototypes.
 
 ## Battle rules
 
-The current server battle format is `gen9nationaldexag`: Generation 9
-mechanics with National Dex AG rules. Species from earlier generations can
-appear when supported by the format. Mega Evolution and Terastallization are
-enabled; Dynamax is disabled. Showdown's `TeamValidator` checks player teams.
-
-The Generation 9 screen is separate from the older browser-side prototype
-battle and raid modes. Those legacy modes still use their own existing client
-logic and have not been migrated to Showdown.
+The battle format is `gen9nationaldexag`: Generation 9 battle mechanics with
+National Dex rules, allowing supported species and moves from earlier
+generations. Mega Evolution and Terastallization are enabled. Dynamax is not
+enabled in this Generation 9 format. Showdown's `TeamValidator` checks
+player teams before a match starts.
 
 ## Run locally
 
@@ -44,35 +71,34 @@ npm install
 npm start
 ```
 
-Open `http://localhost:10000`.
+Open `http://localhost:10000`. The `prestart` lifecycle builds the local
+battle worker, so the first server start also creates the browser bundle.
 
-Run the simulator smoke tests:
+Run the server simulator smoke tests:
 
 ```sh
 npm test
 ```
 
-Regenerate the saved catalogue after changing the pinned Showdown version:
+Regenerate the saved catalogue after changing the pinned server-side
+Showdown version:
 
 ```sh
 npm run data:export
 ```
 
-The `Refresh Showdown catalogue` GitHub Actions workflow also regenerates the
-snapshot and commits it together with `package-lock.json`.
+The `Refresh Showdown catalogue` GitHub Actions workflow also regenerates
+the snapshot and commits it together with `package-lock.json`.
 
-## API
+## API and realtime connection
 
-- `GET /health` — service health check.
-- `GET /api/gen9/health` — battle-engine health and active format.
-- `GET /api/gen9/catalog` — committed Showdown catalogue snapshot.
-- `POST /api/gen9/battles` — create a CPU battle.
-- `POST /api/gen9/battles/:id/action` — submit a CPU-battle action.
-- `GET /api/gen9/battles/:id?token=...` — read a battle snapshot.
-- `/ws` — room-code online PvP using the same Showdown battle service.
-- `GET /api/audit/health` — audit scope and case count.
-- `POST /api/audit/jobs` — start the audit job.
-- `GET /api/audit/jobs/latest` — read the latest in-memory job.
+- `GET /health` — web service health check.
+- `GET /api/gen9/health` — server battle-engine health and active format.
+- `GET /api/gen9/catalog` — server-side Showdown catalogue.
+- `POST /api/gen9/battles` and related action routes — retained server
+  endpoints for diagnostics and compatibility; the browser CPU screen uses
+  its local worker instead.
+- `/ws` — random matchmaking and private-room online PvP.
 
 ## Audit limitations
 
