@@ -69,7 +69,8 @@ const itemNames = JSON.parse(read('data/item-names-ja.json'));
 const page = read('index.html');
 assert.equal(itemNames.choicespecs, 'こだわりメガネ', 'Choice Specs must have its official Japanese name');
 assert.equal(itemNames.miracleberry, 'きせきのみ', 'legacy Berry names must use Japanese localization');
-assert.equal(itemNames.polkadotbow, 'みずたまりボン', 'legacy held item names must be localized');
+assert.equal(itemNames.polkadotbow, 'みずたまリボン', 'legacy held item names must use the official Japanese localization');
+assert.equal(itemNames.stick, 'ながねぎ', 'Stick must use its official Japanese name');
 assert.ok(page.indexOf('js/item-names-ja.js') < page.indexOf('js/patches/v30-item-inventory.js'),
   'Japanese item names must load before the inventory patch');
 assert.ok(itemPatch.includes("num(stock[it.id])") && itemPatch.includes("n<1&&current!==it.id"),
@@ -84,7 +85,8 @@ const helperEnd = itemPatch.indexOf('function optionsFor', helperStart);
 assert.ok(helperStart >= 0 && helperEnd > helperStart, 'item stock transfer helpers must be extractable');
 const helperContext = { num: value => Math.max(0,Math.floor(Number(value)||0)), megaMap: () => new Map([['charizarditex',{}]]) };
 const stockHelpers = vm.runInNewContext(itemPatch.slice(helperStart,helperEnd) +
-  '\\n({transferHeldStock,undoReturnedMegaStone})', helperContext);
+  '
+({transferHeldStock,undoReturnedMegaStone})', helperContext);
 const sampleStock = {choicespecs:1,lifeorb:1,charizarditex:0};
 stockHelpers.transferHeldStock(sampleStock,'choicespecs','lifeorb');
 assert.equal(sampleStock.choicespecs,2);
