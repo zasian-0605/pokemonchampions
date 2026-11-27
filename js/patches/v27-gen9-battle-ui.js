@@ -143,11 +143,18 @@
       check("レベル値",playerTeam.every(m=>Number.isFinite(m.level)&&m.level>=1&&m.level<=100),playerTeam.map(m=>(m.name||"?")+" Lv."+m.level).join(" / "));
       check("持ち物・特性値",playerTeam.map(m=>(m.name||"?")+" item="+(m.heldItem||"なし")+" ability="+(m.abilityId||"なし")).join(" / "));
       check("チーム送信データ",true,JSON.stringify(playerTeam).slice(0,1200));
-      diagnosticReport=lines.join("\n")+"\n\n対戦生成テスト中…";repaint();
+      diagnosticReport=lines.join("\n")+"\n\nサーバー側チーム検証中…";repaint();
+      const validationResult=await timedFetch(API+"/diagnostics/validate",{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",body:JSON.stringify({playerTeam})});
+      if(validationResult.error){check("サーバー側チーム検証",false,validationResult.error.message+" / "+validationResult.ms+"ms");throw validationResult.error;}
+      const validationResponse=validationResult.response,validation=validationResult.body.data||{};
+      check("サーバー側チーム検証",validationResponse.ok&&validation.ok===true,"HTTP "+validationResponse.status+" / "+(validation.error||validation.stage||validationResult.body.text||"本文なし")+" / "+validationResult.ms+"ms");
+      if(!validationResponse.ok||validation.ok!==true)throw new Error("サーバー側チーム検証に失敗");
+      diagnosticReport=lines.join("\n")+"\n\nShowdown対戦生成テスト中…";repaint();
       const battleResult=await timedFetch(API+"/battles",{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",body:JSON.stringify({playerTeam,playerName:"診断テスト"})});
       if(battleResult.error){check("対戦開始通信",false,battleResult.error.message+" / "+battleResult.ms+"ms");throw battleResult.error;}
       const battleResponse=battleResult.response,battle=battleResult.body.data||{};
-      check("対戦開始テスト",battleResponse.ok&&!!battle.battleId,"HTTP "+battleResponse.status+" / "+(battleResponse.headers.get("content-type")||"Content-Type不明")+" / "+battleResult.ms+"ms / "+(battle.error||battle.message||battle.battleId||battleResult.body.text.slice(0,700)||"本文なし"));
+      const responseHeaders=[];battleResponse.headers.forEach((value,key)=>responseHeaders.push(key+"="+value));
+      check("対戦開始テスト",battleResponse.ok&&!!battle.battleId,"HTTP "+battleResponse.status+" "+(battleResponse.statusText||"")+" / "+(battleResponse.headers.get("content-type")||"Content-Type不明")+" / type="+battleResponse.type+" / url="+battleResponse.url+" / "+battleResult.ms+"ms / "+(battle.error||battle.message||battle.battleId||("本文"+battleResult.body.text.length+"文字 "+battleResult.body.text.slice(0,400))||"本文なし")+" / headers="+responseHeaders.join(", "));
       check("対戦応答形式",!!battleResult.body.data,battleResult.body.data?"JSON":"本文: "+battleResult.body.text.slice(0,700));
       if(!battleResponse.ok||!battle.battleId)throw new Error("対戦開始テスト失敗");
       if(battle.battleId&&battle.token){
