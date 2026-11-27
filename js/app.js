@@ -4607,7 +4607,7 @@ const __V182_CORE_BRIDGE_NAMES = ["$", "$$", "GITHUB_SPRITES", "MEGA_GARCHOMP_FO
       const powerHerb=held==="powerherb"||held==="パワフルハーブ"||itemSlug(held)==="powerherb";
       return powerHerb||(Number(move?.apiId||0)===76&&battle?.weather==="sun");
     },
-    getBattle:()=>state.battle
+    getBattle:()=>state.battle,toast
   })});}catch(_e){}
 
   try{Object.defineProperty(window,"findMegaForm",{configurable:true,enumerable:false,get:()=>findMegaForm,set:v=>{findMegaForm=v;}});}catch(_e){}
