@@ -84,9 +84,8 @@ const helperStart = itemPatch.indexOf('function transferHeldStock');
 const helperEnd = itemPatch.indexOf('function optionsFor', helperStart);
 assert.ok(helperStart >= 0 && helperEnd > helperStart, 'item stock transfer helpers must be extractable');
 const helperContext = { num: value => Math.max(0,Math.floor(Number(value)||0)), megaMap: () => new Map([['charizarditex',{}]]) };
-const stockHelpers = vm.runInNewContext(itemPatch.slice(helperStart,helperEnd) +
-  '
-({transferHeldStock,undoReturnedMegaStone})', helperContext);
+const stockHelpers = vm.runInNewContext(itemPatch.slice(helperStart,helperEnd) + String.fromCharCode(10) +
+  '({transferHeldStock,undoReturnedMegaStone})', helperContext);
 const sampleStock = {choicespecs:1,lifeorb:1,charizarditex:0};
 stockHelpers.transferHeldStock(sampleStock,'choicespecs','lifeorb');
 assert.equal(sampleStock.choicespecs,2);
