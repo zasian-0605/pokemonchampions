@@ -31,8 +31,9 @@ Generation 9 battle mode.
   from the pinned server-side Showdown package.
 
 The root `package.json` is the only dependency manifest used by Render and
-GitHub Actions. There is no separate server npm project. The `prestart`
-script builds the browser worker before the web server starts.
+GitHub Actions. There is no separate server npm project. The `postinstall`
+script builds the browser worker during dependency installation, before the
+service is started.
 
 ## Battle architecture
 
@@ -71,8 +72,9 @@ npm install
 npm start
 ```
 
-Open `http://localhost:10000`. The `prestart` lifecycle builds the local
-battle worker, so the first server start also creates the browser bundle.
+Open `http://localhost:10000`. The `postinstall` lifecycle creates the local
+battle worker during `npm install`, so the browser bundle is ready before
+`npm start`.
 
 Run the server simulator smoke tests:
 
