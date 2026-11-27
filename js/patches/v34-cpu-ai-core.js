@@ -580,9 +580,10 @@
       const target = event && event.target;
       if (!target || target.id !== 'cpu-difficulty') return;
       setDifficulty(target.value);
-      if (typeof window.toast === 'function') {
+      const showToast = runtime.toast || window.toast;
+      if (typeof showToast === 'function') {
         const labels = { easy: 'かんたん', normal: 'ふつう', hard: 'むずかしい', expert: 'エキスパート' };
-        window.toast('CPUの難易度を「' + labels[selectedDifficulty] + '」に設定しました。', 'good');
+        showToast('CPUの難易度を「' + labels[selectedDifficulty] + '」に設定しました。', 'good');
       }
     }, true);
   }
