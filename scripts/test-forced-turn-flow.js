@@ -7,6 +7,8 @@ const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'js/patches/v35-forced-turn-flow.js'), 'utf8');
+const appSource = fs.readFileSync(path.join(root, 'js/app.js'), 'utf8');
+assert.doesNotThrow(() => new Function(appSource), 'app.js should parse after forced-turn integration');
 const scheduled = [];
 const logs = [];
 let currentBattle = null;
@@ -101,6 +103,7 @@ assert.ok(sleepHtml.includes('眠っていて動けません'), 'sleep should sh
 assert.equal(asleep.statusTurns, 1, 'sleep counter should advance once in preflight');
 flushTimers();
 assert.equal(executed.length, 1, 'sleep turn should advance automatically');
+assert.equal(executed[0][0]._autoSkipTurn, true, 'status-locked action should bypass the attack animation');
 window.executeAction(executed[0][0], currentBattle);
 assert.equal(originalExecuteActionCalls, 0, 'immobilized turn should not execute a selected move');
 assert.ok(logs.some(message => message.includes('眠っていて動けない')), 'sleep skip should be logged once');
@@ -125,6 +128,7 @@ clickedSlot = null;
 const doubleHtml = window.renderBattlePage();
 assert.ok(doubleHtml.includes('まひして動けません'), 'selected immobilized slot should show forced state');
 assert.ok(currentBattle.pending[0], 'immobilized ally should be placed in pending actions');
+assert.equal(currentBattle.pending[0]._autoSkipTurn, true, 'locked ally action should be marked as an automatic skip');
 flushTimers();
 assert.equal(clickedSlot, 1, 'selection should move to the available ally');
 
