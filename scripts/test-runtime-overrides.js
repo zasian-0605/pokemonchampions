@@ -78,7 +78,7 @@ assert.ok(itemPatch.includes("if(old&&!megaMap().has(old))") && itemPatch.includ
   'ordinary held items must transfer between the bag and the Pokémon');
 assert.ok(itemPatch.includes("new Map()") && itemPatch.includes("function catalogue()"),
   'the shop must use one deduplicated item catalogue');
-assert.ok(itemPatch.includes("data-action=\\"v30-buy-item\\""),
+assert.ok(itemPatch.includes('data-action="v30-buy-item"'),
   'the unified shop must provide a purchase action');
 
 // Parse every browser patch without executing it; this catches syntax errors outside app.js too.
