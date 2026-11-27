@@ -311,11 +311,10 @@ async function createSession(playerTeam, opponentTeam, playerName, opponentName)
 
 function destroySession(session) {
   if (!session) return;
+  if (!session.error && !session.done) session.error = "このバトルセッションは終了しました。";
+  notify(session);
   try { session.stream.writeEnd(); } catch (_) {}
   try { session.stream.destroy?.(); } catch (_) {}
-  for (const finish of [...session.waiters]) {
-    try { finish(); } catch (_) {}
-  }
 }
 
 function buildChoice(session, action) {
