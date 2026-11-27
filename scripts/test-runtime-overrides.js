@@ -63,6 +63,24 @@ assert.ok(!/renderShop\s*=\s*function|handleAction\s*=\s*async\s*function/.test(
   'v18.0 must not add a second Mega shop or purchase override');
 assert.ok(v180.includes('auditMegaShop'), 'v18.0 shop diagnostics must remain available');
 
+// The unified item catalogue must expose only owned items, canonicalize duplicates and preserve Mega Stone form checks.
+const itemPatch = read('js/patches/v30-item-inventory.js');
+const itemNames = JSON.parse(read('data/item-names-ja.json'));
+const page = read('index.html');
+assert.equal(itemNames.choicespecs, 'こだわりメガネ', 'Choice Specs must have its official Japanese name');
+assert.ok(page.indexOf('js/item-names-ja.js') < page.indexOf('js/patches/v30-item-inventory.js'),
+  'Japanese item names must load before the inventory patch');
+assert.ok(itemPatch.includes("num(stock[it.id])") && itemPatch.includes("n<1&&current!==it.id"),
+  'unowned generic items must not appear in the training selector');
+assert.ok(itemPatch.includes("W.findMegaForm?.({...mon,heldItem:it.id})"),
+  'Mega Stone options must be restricted to matching Mega forms');
+assert.ok(itemPatch.includes("if(old&&!megaMap().has(old))") && itemPatch.includes("if(next&&!megaMap().has(next))"),
+  'ordinary held items must transfer between the bag and the Pokémon');
+assert.ok(itemPatch.includes("new Map()") && itemPatch.includes("function catalogue()"),
+  'the shop must use one deduplicated item catalogue');
+assert.ok(itemPatch.includes("data-action=\\"v30-buy-item\\""),
+  'the unified shop must provide a purchase action');
+
 // Parse every browser patch without executing it; this catches syntax errors outside app.js too.
 const patchDir = path.join(root, 'js', 'patches');
 const patchFiles = fs.readdirSync(patchDir).filter((name) => name.endsWith('.js')).sort();
