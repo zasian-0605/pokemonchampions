@@ -11,7 +11,8 @@
     "build:browser-gen9": "node scripts/build-browser-gen9.js",
     "postinstall": "node scripts/build-browser-gen9.js",
     "test:browser-gen9": "node scripts/test-browser-gen9.js",
-    "test:battle-ui": "node scripts/test-battle-ui.js"
+    "test:battle-ui": "node scripts/test-battle-ui.js",
+    "test:runtime-overrides": "node scripts/test-runtime-overrides.js"
   },
   "engines": {
     "node": ">=22.18.0"
