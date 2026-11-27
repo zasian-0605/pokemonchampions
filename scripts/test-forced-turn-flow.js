@@ -130,7 +130,7 @@ assert.equal(clickedSlot, 1, 'selection should move to the available ally');
 
 // Doubles: if every active Pokémon is locked, the whole turn completes automatically.
 const sleeping = makeMon('sleeping', { status: 'slp', statusTurns: 0 });
-const frozen = makeMon('frozen', { status: 'frz', statusTurns: 0 });
+const frozen = makeMon('frozen', { status: 'slp', statusTurns: 0 });
 currentBattle = makeBattle('doubles', [sleeping, frozen]);
 currentBattle.playerActive = [0, 1];
 currentBattle.pending = {};
