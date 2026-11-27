@@ -193,11 +193,13 @@
   }
 
   function pendingActionFor(mon, slot) {
+    const preflight = mon._turnPreflight;
     return {
       actorUid: mon.uid,
       moveId: mon._chargingMove || null,
       targetUid: null,
-      slot: slot
+      slot: slot,
+      _autoSkipTurn: !!(preflight && preflight.kind === 'status' && !preflight.canAct)
     };
   }
 
