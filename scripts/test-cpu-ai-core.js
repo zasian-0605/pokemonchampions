@@ -201,4 +201,27 @@ assert.equal(window.chooseEnemyAction(easyMon, player).moveId, 'baseline',
   'easy CPU should keep baseline action selection');
 assert.ok(baselineCalls > 0);
 
+
+const switchFire = makeMon('switch-fire', ['Fire'], { atk: 110, spa: 110 }, ['fireblast']);
+const switchWater = makeMon('switch-water', ['Water'], { atk: 100, spa: 110 }, ['waterpulse']);
+const switchRock = makeMon('switch-rock', ['Rock'], { atk: 100, spa: 100 }, ['waterpulse']);
+switchFire._cpuDifficulty = 'hard';
+const switchBattle = {
+  mode: 'singles',
+  turn: 4,
+  result: null,
+  enemyTeam: [switchFire, switchWater],
+  enemyActive: [0],
+  playerTeam: [switchRock],
+  playerActive: [0],
+  sideConditions: {},
+  weather: null
+};
+const switchAction = api.chooseSwitch(switchFire, switchRock, switchBattle);
+assert.equal(switchAction && switchAction.switchTo, 1,
+  'hard CPU should switch to a healthier matchup that resists the incoming Water attack');
+switchFire.volatile.trapped = true;
+assert.equal(api.chooseSwitch(switchFire, switchRock, switchBattle), null,
+  'CPU must not switch when trapped');
+
 console.log('CPU AI core tests passed.');
