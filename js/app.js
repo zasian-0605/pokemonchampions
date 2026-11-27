@@ -1025,10 +1025,8 @@ function applyMoveSpecificEffects(actor,target,move,b){
  const legacyPseudoApiIds=new Set([433,356,472,478]);
  const legacyPseudoNames=new Set(['trickroom','gravity','wonderroom','magicroom']);
  if(pseudo&&!legacyPseudoNames.has(id)&&!legacyPseudoApiIds.has(moveApi)){
-  if(pseudo==='trickroom')b.trickRoomTurns=b.trickRoomTurns>0?0:5;
-  else if(pseudo==='wonderroom')b.wonderRoomTurns=b.wonderRoomTurns>0?0:5;
-  else if(pseudo==='magicroom')b.magicRoomTurns=b.magicRoomTurns>0?0:5;
-  else if(pseudo==='gravity')b.gravityTurns=b.gravityTurns>0?0:5;
+  const pseudoTimerKey=({trickroom:'trickRoomTurns',wonderroom:'wonderRoomTurns',magicroom:'magicRoomTurns',gravity:'gravityTurns'})[pseudo];
+  if(pseudoTimerKey)v170ToggleFieldTimer(b,pseudoTimerKey);
   else b[pseudo+'Turns']=5;
   battleLog('場の特殊効果が変化した！');
  }
@@ -1951,6 +1949,51 @@ const V170_CATEGORY_STATUS = {
 function v170Api(move){return Number(move?.apiId||0);}
 function v170Side(mon,b){return (b.playerTeam||[]).some(x=>x.uid===mon?.uid)?'player':'enemy';}
 function v170MoveName(move){return String(move?.jpName||move?.name||'技');}
+const V170_TIMED_FIELD_KEYS=Object.freeze(['trickRoomTurns','wonderRoomTurns','magicRoomTurns','gravityTurns']);
+function v170ToggleFieldTimer(b,key){
+ if(!b||!V170_TIMED_FIELD_KEYS.includes(key))return 0;
+ const current=Math.max(0,Math.trunc(Number(b[key])||0));
+ b[key]=current>0?0:5;
+ return b[key];
+}
+function v170AdvanceFieldTimers(b){
+ if(!b)return [];
+ const expired=[];
+ for(const key of V170_TIMED_FIELD_KEYS){
+  const current=Math.max(0,Math.trunc(Number(b[key])||0));
+  if(current<=0)continue;
+  b[key]=current-1;
+  if(b[key]===0)expired.push(key);
+ }
+ return expired;
+}
+function v170RunFieldTimerTests(){
+ const checks=[],test=(name,fn)=>{try{checks.push({name,passed:!!fn()});}catch(error){checks.push({name,passed:false,error:String(error?.message||error)});}};
+ test('トリックルームは5回のターン終了処理で終了する',()=>{
+  const b={trickRoomTurns:0},values=[];
+  if(v170ToggleFieldTimer(b,'trickRoomTurns')!==5)return false;
+  for(let i=0;i<5;i++){v170AdvanceFieldTimers(b);values.push(b.trickRoomTurns);}
+  return values.join(',')==='4,3,2,1,0';
+ });
+ test('有効中に再使用するとトリックルームは解除される',()=>{
+  const b={trickRoomTurns:3};
+  return v170ToggleFieldTimer(b,'trickRoomTurns')===0&&b.trickRoomTurns===0&&v170AdvanceFieldTimers(b).length===0;
+ });
+ test('終了後はトリックルームを再び発動できる',()=>{
+  const b={trickRoomTurns:1};
+  v170AdvanceFieldTimers(b);
+  return b.trickRoomTurns===0&&v170ToggleFieldTimer(b,'trickRoomTurns')===5;
+ });
+ test('ワンダールーム・マジックルーム・重力も同じ5ターン管理',()=>{
+  const b={wonderRoomTurns:5,magicRoomTurns:5,gravityTurns:5};
+  for(let i=0;i<5;i++)v170AdvanceFieldTimers(b);
+  return V170_TIMED_FIELD_KEYS.slice(1).every(key=>b[key]===0);
+ });
+ return {passed:checks.filter(x=>x.passed).length,total:checks.length,checks};
+}
+function v170AuditFieldTimers(b=state.battle){
+ return {turn:Number(b?.turn||0),timers:Object.fromEntries(V170_TIMED_FIELD_KEYS.map(key=>[key,Math.max(0,Math.trunc(Number(b?.[key])||0))])),tests:v170RunFieldTimerTests()};
+}
 function v170SetStages(mon,vals){if(!mon)return;mon.stages=mon.stages||{atk:0,def:0,spa:0,spd:0,spe:0,accuracy:0,evasion:0};for(const k of ['atk','def','spa','spd','spe','accuracy','evasion'])mon.stages[k]=Math.max(-6,Math.min(6,Number(vals?.[k]||0)));}
 function v170ForceSwitch(target,b){const side=v170Side(target,b),team=side==='player'?b.playerTeam:b.enemyTeam,active=side==='player'?b.playerActive:b.enemyActive;const ix=team.findIndex(m=>m.uid===target.uid),slot=active.indexOf(ix);if(slot<0)return false;const next=team.findIndex((m,i)=>i!==ix&&!m.fainted&&m.hp>0&&!active.includes(i));if(next<0)return false;active[slot]=next;triggerEntryEffects([team[next]],side==='player'?activeLiving(b.enemyTeam,b.enemyActive):activeLiving(b.playerTeam,b.playerActive),b);battleLog(`${target.name}は交代させられた！ ${team[next].name}が現れた！`);return true;}
 function v170HandleVariableDamage(actor,target,move,b){
@@ -2037,10 +2080,10 @@ function v170RunBattleEffects(actor,target,move,b){
  // Side/space rule changes, weather/terrain existing handlers remain shared with damage.
  const own=v170Side(actor,b);b.sideConditions=b.sideConditions||{player:{},enemy:{}};b.sideConditions.player=b.sideConditions.player||{};b.sideConditions.enemy=b.sideConditions.enemy||{};
  if(api===366||id==='tailwind'){b.sideConditions[own].tailwindTurns=4;battleLog('追い風が吹き始めた！');}
- if(api===433||id==='trickroom'){b.trickRoomTurns=b.trickRoomTurns>0?0:5;battleLog(b.trickRoomTurns?'時空が逆転した！':'時空が元に戻った！');}
- if(api===472||id==='wonderroom'){b.wonderRoomTurns=b.wonderRoomTurns>0?0:5;battleLog('ワンダールームの効果が変化した！');}
- if(api===478||id==='magicroom'){b.magicRoomTurns=b.magicRoomTurns>0?0:5;battleLog('マジックルームの効果が変化した！');}
- if(api===356||id==='gravity'){b.gravityTurns=b.gravityTurns>0?0:5;battleLog('重力が強くなった！');}
+ if(api===433||id==='trickroom'){const turns=v170ToggleFieldTimer(b,'trickRoomTurns');battleLog(turns?'時空が逆転した！':'時空が元に戻った！');}
+ if(api===472||id==='wonderroom'){v170ToggleFieldTimer(b,'wonderRoomTurns');battleLog('ワンダールームの効果が変化した！');}
+ if(api===478||id==='magicroom'){v170ToggleFieldTimer(b,'magicRoomTurns');battleLog('マジックルームの効果が変化した！');}
+ if(api===356||id==='gravity'){v170ToggleFieldTimer(b,'gravityTurns');battleLog('重力が強くなった！');}
  // Trapping and forced switch.
  if([20,35,83,128,250,328,611].includes(api)||['bind','wrap','firespin','whirlpool','sandtomb','infestation','clamp'].includes(id)){target._trappedTurns=Math.max(Number(target._trappedTurns||0),4);}
  if([509,525].includes(api)&&!['circlethrow','dragontail'].includes(id))v170ForceSwitch(target,b);
@@ -2083,10 +2126,15 @@ processEndTurn=function(b){
  for(const team of teams)for(const mon of team){const w=mon?._wish;if(!w||w.dueTurn>b.turn)continue;const active=w.side==='player'?b.playerActive:b.enemyActive,t=w.side==='player'?b.playerTeam:b.enemyTeam;const idx=t[active[w.slot]];if(idx&&!idx.fainted&&idx.hp>0){const before=idx.hp;idx.hp=Math.min(idx.maxhp,idx.hp+w.amount);if(idx.hp>before)battleLog(`${idx.name}は願い事でHPを回復した！`);}mon._wish=null;}
  // Delayed attacks are resolved at end of the promised turn, before victory is decided.
  b.delayedAttacks=b.delayedAttacks||[];for(const q of b.delayedAttacks){q.dueIn--;if(q.dueIn>0)continue;const attacker=[...b.playerTeam,...b.enemyTeam].find(m=>m.uid===q.actorUid);const team=q.targetSide==='player'?b.playerTeam:b.enemyTeam,active=q.targetSide==='player'?b.playerActive:b.enemyActive;const target=team[active[q.targetSlot]];const move=getMove(q.moveId);if(attacker&&target&&!target.fainted&&target.hp>0&&move){const result=calculateDamage(attacker,target,move,b);if(result.effectiveness===0)battleLog(`${target.name}には遅れて届いた攻撃が効かなかった！`);else{const actual=applyDamage(target,result.damage,attacker,{...move,recoil:undefined,drain:undefined});battleLog(`${getMoveName(move)}が遅れて命中し、${target.name}に${actual}ダメージ！`);}}q.done=true;}b.delayedAttacks=b.delayedAttacks.filter(q=>!q.done);
- for(const key of ['trickRoomTurns','wonderRoomTurns','magicRoomTurns','gravityTurns'])if(b[key]>0){b[key]--;if(b[key]===0)battleLog('場の特殊ルールの効果が切れた！');}
+ for(const key of v170AdvanceFieldTimers(b))battleLog('場の特殊ルールの効果が切れた！');
  for(const side of ['player','enemy']){const cond=b.sideConditions?.[side];if(cond?.tailwindTurns>0){cond.tailwindTurns--;if(cond.tailwindTurns===0)battleLog('追い風が止んだ！');}}
  __v170ProcessEndTurn(b);
 };
+if(window.PokemonChampions2DData)Object.assign(window.PokemonChampions2DData,{
+ fieldTimerKeys:V170_TIMED_FIELD_KEYS.slice(),
+ auditFieldTimers:v170AuditFieldTimers,
+ testFieldTimers:v170RunFieldTimerTests
+});
 // Mutable battle types now participate in effectiveness checks rather than being display-only.
 const __v170TypeMult=typeMult;
 typeMult=function(moveType,defSpecies,defMon=null){const effectiveSpecies=defMon&&Array.isArray(defMon.types)?{...(defSpecies||{}),types:defMon.types}:defSpecies;return __v170TypeMult(moveType,effectiveSpecies,defMon);};
