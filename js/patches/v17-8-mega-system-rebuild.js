@@ -113,6 +113,11 @@
   else if(result.changed){toast(V178_isEnergy(result.newId)?'専用メガエナジーを装備しました。':(V178_isEnergy(result.oldId)?'専用メガエナジーをバッグに戻しました。':'持ち物を変更しました。'),'good');}
  },true);
 
+ // Entering the shop starts with an unfiltered catalogue; its search controls live here.
+ document.addEventListener('click',function(e){
+  if(e.target?.closest?.('[data-page="shop"]'))state.shopSearch='';
+ },true);
+
  renderShop=function(){
   const q=searchKey(state.shopSearch||'');
   const list=MEGA_STONES.filter(x=>!q||searchKey(x.name).includes(q)||searchKey(x.id).includes(q)||searchKey(x.meta?.base||'').includes(q));
