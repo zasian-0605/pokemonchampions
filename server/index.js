@@ -41,6 +41,19 @@ function readJson(req, maxBytes = 1024 * 1024) {
 }
 async function handleGen9Api(req, res, url) {
   const requestId = crypto.randomUUID();
+  const requestStartedAt = Date.now();
+  res.setHeader("X-Gen9-Request-ID", requestId);
+  res.on("finish", () => console.info(
+    "[gen9-api] response", requestId, req.method, url.pathname,
+    "status=" + res.statusCode, "ms=" + (Date.now() - requestStartedAt)
+  ));
+  req.on("aborted", () => console.error(
+    "[gen9-api] request aborted", requestId, req.method, url.pathname
+  ));
+  console.info(
+    "[gen9-api] request received", requestId, req.method, url.pathname,
+    "content-length=" + (req.headers["content-length"] || "unknown")
+  );
   try {
     if (req.method === "GET" && url.pathname === "/api/gen9/health") {
       return sendJson(res, 200, {
@@ -56,9 +69,25 @@ async function handleGen9Api(req, res, url) {
     if (req.method === "GET" && url.pathname === "/api/gen9/catalog") {
       return sendJson(res, 200, gen9Service.catalog());
     }
+    if (req.method === "POST" && url.pathname === "/api/gen9/diagnostics/validate") {
+      const body = await readJson(req);
+      console.info("[gen9-api] team validation start", requestId);
+      const normalized = gen9Service.validateTeam(sanitizeGen9Team(body.playerTeam));
+      return sendJson(res, 200, {
+        ok:true,
+        stage:"team-validation",
+        teamSize:normalized.length,
+        pokemon:normalized.map(mon => ({
+          species:mon.species, moves:mon.moves, ability:mon.ability,
+          item:mon.item, nature:mon.nature, teraType:mon.teraType
+        }))
+      });
+    }
     if (req.method === "POST" && url.pathname === "/api/gen9/battles") {
+      console.info("[gen9-api] CPU battle request accepted", requestId);
       const body = await readJson(req);
       console.info("[gen9-api] CPU battle start", requestId, "teamSize=" + (Array.isArray(body.playerTeam) ? body.playerTeam.length : "invalid"));
+      console.info("[gen9-api] Showdown createBattle begin", requestId);
       const snapshot = await gen9Service.createBattle({
         playerTeam:body.playerTeam,
         opponentTeam:body.opponentTeam,
@@ -66,6 +95,7 @@ async function handleGen9Api(req, res, url) {
         player2Name:body.opponentName || "CPU",
         kind:"cpu"
       });
+      console.info("[gen9-api] Showdown createBattle complete", requestId, "battleId=" + snapshot.battleId);
       return sendJson(res, 201, snapshot);
     }
     const actionMatch = url.pathname.match(/^\/api\/gen9\/battles\/([a-f0-9]+)\/action$/);
@@ -97,6 +127,7 @@ async function handleGen9Api(req, res, url) {
       ok:false,
       code:"GEN9_API_REQUEST_FAILED",
       requestId,
+      stage:error?.stage || "request-handler",
       error:error?.message || "National Dex API error."
     });
   }
