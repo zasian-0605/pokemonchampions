@@ -700,7 +700,7 @@ const server = http.createServer((req,res) => {
     const ext = path.extname(file).toLowerCase();
     let servedFile = file;
     let contentEncoding = "";
-    if (ext === ".js" && /\\bgzip\\b/i.test(String(req.headers["accept-encoding"] || ""))) {
+    if (ext === ".js" && String(req.headers["accept-encoding"] || "").toLowerCase().includes("gzip")) {
       const gzipFile = file + ".gz";
       try {
         if (fs.statSync(gzipFile).isFile()) {
