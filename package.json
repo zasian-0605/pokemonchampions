@@ -9,7 +9,8 @@
     "test": "node server/test-gen9-engine.js",
     "data:export": "node scripts/export-showdown-catalog.js",
     "build:browser-gen9": "node scripts/build-browser-gen9.js",
-    "postinstall": "node scripts/build-browser-gen9.js"
+    "postinstall": "node scripts/build-browser-gen9.js",
+    "test:browser-gen9": "node scripts/test-browser-gen9.js"
   },
   "engines": {
     "node": ">=22.18.0"
