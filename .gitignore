@@ -9,3 +9,5 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 *.log
+js/gen9-local-engine.worker.js
+js/gen9-local-engine.worker.js.gz
