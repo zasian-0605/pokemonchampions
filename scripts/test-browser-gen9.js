@@ -14,7 +14,7 @@ function validTeam() {
   return [{
     name: "Browser Worker Test",
     species: "snorlax",
-    level: 50,
+    level: 100,
     ability: "thickfat",
     item: "leftovers",
     nature: "Careful",
