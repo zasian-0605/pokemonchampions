@@ -1,16 +1,64 @@
-/* v28: National Dex battles on the server-side Pokémon Showdown simulator. */
+/* v31: Browser-local Showdown CPU engine; online matches remain server synchronized. */
 (() => {
   "use strict";
-  const W=window, APP=()=>W.PokemonChampions2D, S=()=>APP()?.state, API="/api/gen9";
+  const W=window, APP=()=>W.PokemonChampions2D, S=()=>APP()?.state;
   const statusJa={brn:"やけど",par:"まひ",slp:"ねむり",frz:"こおり",psn:"どく",tox:"もうどく"};
   let session=null, team=[], busy=false, errorText="", gimmick="", onlineSocket=null, onlineRoomCode="", onlineStatus="", waitingForOpponent=false, opponentName="CPU", diagnosticBusy=false, diagnosticReport="", randomSearching=false, onlineMode="private";
   const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const idOf=v=>String(v||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
-  async function api(path,options){
-    const r=await fetch(API+path,{...(options||{}),headers:{"Content-Type":"application/json",...((options||{}).headers||{})},cache:"no-store"});
-    const data=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(data.error||"対戦サーバーとの通信に失敗しました。");
-    return data;
+  let localWorker=null, localWorkerSequence=0;
+  const localWorkerPending=new Map();
+  function rejectLocalWorkerPending(error){
+    for(const [id,pending] of localWorkerPending){
+      clearTimeout(pending.timer);
+      pending.reject(error);
+      localWorkerPending.delete(id);
+    }
+  }
+  function getLocalWorker(){
+    if(localWorker)return localWorker;
+    if(typeof Worker!=="function")throw new Error("このブラウザはローカル対戦Workerに対応していません。");
+    const worker=new Worker("/js/gen9-local-engine.worker.js?v=31.0.0");
+    worker.onmessage=event=>{
+      const message=event.data||{};
+      const pending=localWorkerPending.get(message.id);
+      if(!pending)return;
+      clearTimeout(pending.timer);
+      localWorkerPending.delete(message.id);
+      if(message.ok)pending.resolve(message.result);
+      else pending.reject(new Error(message.error||"ローカル対戦エンジンでエラーが発生しました。"));
+    };
+    worker.onerror=event=>{
+      const error=new Error("ローカル対戦エンジンを読み込めませんでした。"+(event?.message?" "+event.message:""));
+      rejectLocalWorkerPending(error);
+      if(localWorker===worker)localWorker=null;
+      worker.terminate();
+    };
+    localWorker=worker;
+    return worker;
+  }
+  function localEngineCall(type,payload){
+    const worker=getLocalWorker();
+    const id=++localWorkerSequence;
+    return new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>{
+        localWorkerPending.delete(id);
+        reject(new Error("ローカル対戦エンジンが応答しません。ページを再読み込みして再試行してください。"));
+      },90000);
+      localWorkerPending.set(id,{resolve,reject,timer});
+      try{worker.postMessage({id,type,...(payload||{})});}
+      catch(error){
+        clearTimeout(timer);
+        localWorkerPending.delete(id);
+        reject(error);
+      }
+    });
+  }
+  function stopLocalWorker(){
+    const worker=localWorker;
+    localWorker=null;
+    if(worker)worker.terminate();
+    rejectLocalWorkerPending(new Error("ローカル対戦を終了しました。"));
   }
   function selectedOwned(){
     const s=S(); if(!s)return [];
@@ -107,69 +155,49 @@
   }
   async function runDiagnostic(){
     if(diagnosticBusy)return;
-    diagnosticBusy=true;diagnosticReport="詳細診断を開始…";repaint();
+    diagnosticBusy=true;
+    diagnosticReport="ブラウザ内Showdownエンジンを確認中…";
+    repaint();
     const lines=[],started=Date.now();
     const check=(name,ok,detail)=>lines.push((ok?"OK":"NG")+"｜"+name+"："+String(detail||"").slice(0,700));
-    const safeJson=async r=>{const text=await r.text();let data=null;try{data=JSON.parse(text);}catch(_){}return {text,data};};
-    const timedFetch=async(url,options)=>{const t=Date.now();try{const response=await fetch(url,options);const body=await safeJson(response);return {response,body,ms:Date.now()-t};}catch(e){return {error:e,ms:Date.now()-t};}};
     try{
       check("画面・実行環境",!!S()&&S()?.page==="gen9-battle","page="+(S()?.page||"不明")+" / browser="+navigator.userAgent);
-      check("API接続先",true,location.origin+API);
-      const healthResult=await timedFetch(API+"/health",{cache:"no-store"});
-      if(healthResult.error){check("ヘルス通信",false,healthResult.error.message);throw healthResult.error;}
-      const {response:healthResponse,body:healthBody}=healthResult,health=healthBody.data||{};
-      check("対戦サーバー",healthResponse.ok&&health.ok===true, "HTTP "+healthResponse.status+" / "+(health.engine||healthBody.text||"応答あり")+" / "+healthResult.ms+"ms");
-      check("ヘルス応答形式",!!healthBody.data,healthBody.data?"JSON":"JSONではない: "+healthBody.text.slice(0,250));
-      if(!healthResponse.ok||!health.ok)throw new Error("ヘルスチェック失敗");
-      const catalogResult=await timedFetch(API+"/catalog",{cache:"no-store"});
-      if(catalogResult.error){check("カタログ通信",false,catalogResult.error.message);throw catalogResult.error;}
-      const {response:catalogResponse,body:catalogBody}=catalogResult,catalog=catalogBody.data||{};
-      const catalogOk=catalogResponse.ok&&Array.isArray(catalog.moves)&&Array.isArray(catalog.abilities)&&Array.isArray(catalog.items);
-      check("技・特性・持ち物データ",catalogOk,"HTTP "+catalogResponse.status+" / 技 "+(catalog.moves?.length??"?")+"・特性 "+(catalog.abilities?.length??"?")+"・持ち物 "+(catalog.items?.length??"?")+" / "+catalogResult.ms+"ms");
-      check("カタログ応答形式",!!catalogBody.data,catalogBody.data?"JSON":"応答本文: "+catalogBody.text.slice(0,300));
-      if(!catalogOk)throw new Error("カタログの形式または取得に失敗");
+      check("ローカル実行方式",typeof Worker==="function","CPU対戦計算はブラウザ内Workerで実行");
       const playerTeam=buildTeam();
       check("チーム人数",playerTeam.length>=1&&playerTeam.length<=6,playerTeam.length+"匹（1〜6匹が必要）");
-      if(!playerTeam.length)throw new Error("チームが空です");
-      check("ポケモン識別子",playerTeam.every(m=>!!(m.speciesId||m.species)),playerTeam.map(m=>(m.name||"?")+"="+(m.speciesId||m.species||"未設定")).join(" / "));
-      const noMoves=playerTeam.filter(m=>!m.moves?.length);
-      check("技設定",!noMoves.length,noMoves.length?noMoves.map(m=>m.name||m.species).join("、")+" に技なし":"全員に技あり");
-      check("技数",playerTeam.every(m=>m.moves.length<=4),playerTeam.map(m=>(m.name||"?")+":"+m.moves.length).join(" / "));
-      check("技ID形式",playerTeam.every(m=>m.moves.every(x=>typeof x==="string"&&x.length>0)),playerTeam.map(m=>(m.name||"?")+":"+m.moves.join(",")).join(" / "));
-      const catalogMoveIds=new Set(catalog.moves.map(move=>String(move.id||"")));
-      const unknownShowdownMoves=playerTeam.flatMap(mon=>mon.moves.filter(id=>!catalogMoveIds.has(id)).map(id=>(mon.name||mon.species)+":"+id));
-      check("Showdown技ID照合",unknownShowdownMoves.length===0,unknownShowdownMoves.length?("未変換・未収録："+unknownShowdownMoves.join(" / ")):"全"+playerTeam.reduce((n,mon)=>n+mon.moves.length,0)+"技がShowdownカタログに一致");
-      if(unknownShowdownMoves.length)throw new Error("Showdownに変換できていない技IDがあります。技データの変換を確認してください。");
-      check("レベル値",playerTeam.every(m=>Number.isFinite(m.level)&&m.level>=1&&m.level<=100),playerTeam.map(m=>(m.name||"?")+" Lv."+m.level).join(" / "));
-      check("持ち物・特性値",playerTeam.map(m=>(m.name||"?")+" item="+(m.heldItem||"なし")+" ability="+(m.abilityId||"なし")).join(" / "));
-      check("チーム送信データ",true,JSON.stringify(playerTeam).slice(0,1200));
-      diagnosticReport=lines.join("\n")+"\n\nサーバー側チーム検証中…";repaint();
-      const validationResult=await timedFetch(API+"/diagnostics/validate",{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",body:JSON.stringify({playerTeam})});
-      if(validationResult.error){check("サーバー側チーム検証",false,validationResult.error.message+" / "+validationResult.ms+"ms");throw validationResult.error;}
-      const validationResponse=validationResult.response,validation=validationResult.body.data||{};
-      check("サーバー側チーム検証",validationResponse.ok&&validation.ok===true,"HTTP "+validationResponse.status+" / "+(validation.error||validation.stage||validationResult.body.text||"本文なし")+" / "+validationResult.ms+"ms");
-      if(!validationResponse.ok||validation.ok!==true)throw new Error("サーバー側チーム検証に失敗");
-      diagnosticReport=lines.join("\n")+"\n\nShowdown対戦生成テスト中…";repaint();
-      const battleResult=await timedFetch(API+"/battles",{method:"POST",headers:{"Content-Type":"application/json"},cache:"no-store",body:JSON.stringify({playerTeam,playerName:"診断テスト"})});
-      if(battleResult.error){check("対戦開始通信",false,battleResult.error.message+" / "+battleResult.ms+"ms");throw battleResult.error;}
-      const battleResponse=battleResult.response,battle=battleResult.body.data||{};
-      const responseHeaders=[];battleResponse.headers.forEach((value,key)=>responseHeaders.push(key+"="+value));
-      check("対戦開始テスト",battleResponse.ok&&!!battle.battleId,"HTTP "+battleResponse.status+" "+(battleResponse.statusText||"")+" / "+(battleResponse.headers.get("content-type")||"Content-Type不明")+" / type="+battleResponse.type+" / url="+battleResponse.url+" / "+battleResult.ms+"ms / "+(battle.error||battle.message||battle.battleId||("本文"+battleResult.body.text.length+"文字 "+battleResult.body.text.slice(0,400))||"本文なし")+" / headers="+responseHeaders.join(", "));
-      check("対戦応答形式",!!battleResult.body.data,battleResult.body.data?"JSON":"本文: "+battleResult.body.text.slice(0,700));
-      if(!battleResponse.ok||!battle.battleId)throw new Error("対戦開始テスト失敗");
-      if(battle.battleId&&battle.token){
-        const cleanup=await timedFetch(API+"/battles/"+encodeURIComponent(battle.battleId)+"?token="+encodeURIComponent(battle.token),{method:"DELETE",cache:"no-store"});
-        check("テスト対戦の後片付け",!!cleanup.response?.ok,cleanup.error?.message||("HTTP "+cleanup.response?.status+" / "+cleanup.ms+"ms"));
-      }else check("テスト対戦の後片付け",false,"battleId/tokenが応答にありません");
+      if(!playerTeam.length)throw new Error("先にポケモンをスカウトしてください。");
+      check("ポケモン識別子",playerTeam.every(mon=>!!(mon.speciesId||mon.species)),
+        playerTeam.map(mon=>(mon.name||"?")+"="+(mon.speciesId||mon.species||"未設定")).join(" / "));
+      check("技設定",playerTeam.every(mon=>Array.isArray(mon.moves)&&mon.moves.length>0),
+        playerTeam.map(mon=>(mon.name||"?")+":"+mon.moves.length+"技").join(" / "));
+      check("レベル値",playerTeam.every(mon=>Number.isInteger(mon.level)&&mon.level>=1&&mon.level<=100),
+        playerTeam.map(mon=>(mon.name||"?")+" Lv."+mon.level).join(" / "));
+      check("持ち物・特性データ",true,
+        playerTeam.map(mon=>(mon.name||"?")+" / 特性="+(mon.abilityId||"自動")+" / 持ち物="+(mon.heldItem||"なし")).join(" ; "));
+      diagnosticReport=lines.join("\n")+"\n\n端末内のShowdownでチーム検証・CPU生成・対戦開始テスト中…";
+      repaint();
+      const result=await localEngineCall("diagnose",{playerTeam});
+      check("Showdownシミュレーター",result.ok===true,result.engine);
+      check("National Dex AG形式",result.format==="gen9nationaldexag",result.formatName+" / "+result.format);
+      check("内蔵図鑑・技・特性・持ち物",!!result.counts,
+        "ポケモン "+result.counts.species+"・技 "+result.counts.moves+"・特性 "+result.counts.abilities+"・持ち物 "+result.counts.items);
+      check("CPUランダムチーム",result.opponentTeamSize===6,result.opponentTeamSize+"匹を端末内で生成");
+      check("初期対戦リクエスト",result.initialRequestReady,"プレイヤー・CPU双方の行動選択を取得");
+      check("CPU戦のサーバーAPI",true,"チーム検証・CPU生成・対戦開始・ターン処理はブラウザ内で実行");
       diagnosticReport=lines.join("\n")+"\n\n診断完了："+(Date.now()-started)+"ms";
-    }catch(e){diagnosticReport=lines.join("\n")+"\n\n診断停止："+(e?.message||String(e))+"\n所要時間："+(Date.now()-started)+"ms";}
-    finally{diagnosticBusy=false;repaint();}
+    }catch(error){
+      check("ローカルエンジン",false,error?.message||String(error));
+      diagnosticReport=lines.join("\n")+"\n\n診断停止："+(error?.message||String(error))+"\n所要時間："+(Date.now()-started)+"ms";
+    }finally{
+      diagnosticBusy=false;
+      repaint();
+    }
   }
   function render(){
     if(!session){
       const roster=buildTeam();
       const items=roster.map((m,i)=>'<div class="g9-team"><span>'+(i+1)+'</span><b>'+esc(m.name||m.species)+'</b><small>Lv.'+m.level+' · '+m.moves.length+'技</small></div>').join("");
-      return '<section class="g9"><header><div><small>SHOWDOWN SIMULATOR · NATIONAL DEX</small><h1>全世代バトル</h1><p>第1〜9世代のポケモン・技・特性・持ち物に対応。メガシンカとテラスタルはShowdownで処理します。ダイマックスは第8世代専用のため、この試合形式では未対応です。</p></div><b class="g9-badge">GEN 1–9</b></header><div class="g9-columns"><section class="g9-card"><h2>自分のチーム</h2><p>編成画面で選んだチームを使います。未選択ならボックスの先頭から最大6匹です。</p><div class="g9-roster">'+(items||"ポケモンをスカウトしてください。")+'</div><button class="g9-primary" data-g9="start" '+(!roster.length||busy?"disabled":"")+'>'+(busy?"準備中…":"全世代CPU対戦を開始")+'</button><p>CPUはShowdownの第9世代ランダムチーム生成機能を使用します。プレイヤーは全国図鑑のポケモンを選んで対戦できます。</p></section><section class="g9-card"><h2>対戦ルール</h2><div class="g9-spec"><span>図鑑</span><b>第1〜9世代（National Dex）</b></div><div class="g9-spec"><span>形式</span><b>シングル 6対6</b></div><div class="g9-spec"><span>ルール</span><b>Gen 9 National Dex AG</b></div><div class="g9-spec"><span>ギミック</span><b>メガシンカ・テラスタル</b></div><p>大会向けの使用制限を外した全国図鑑ルールです。ダイマックスも同じ試合に混ぜるにはShowdown本体の追加改造が必要です。</p></section></div><button class="g9-secondary" data-g9="diagnose" '+(diagnosticBusy?"disabled":"")+'>'+(diagnosticBusy?"診断中…":"不具合を診断する")+'</button>'+(diagnosticReport?'<pre class="g9-diagnostic">'+esc(diagnosticReport)+'</pre>':"")+renderOnlinePanel()+(errorText?'<div class="g9-error">'+esc(errorText)+'</div>':"")+'</section>';
+      return '<section class="g9"><header><div><small>LOCAL SHOWDOWN ENGINE · NATIONAL DEX</small><h1>全世代バトル</h1><p>第1〜9世代のデータを内蔵したShowdownエンジンがブラウザ内で動作します。CPU戦の対戦計算にサーバーAPIは使いません。</p></div><b class="g9-badge">GEN 1–9</b></header><div class="g9-columns"><section class="g9-card"><h2>自分のチーム</h2><p>編成画面で選んだチームを使います。未選択ならボックスの先頭から最大6匹です。</p><div class="g9-roster">'+(items||"ポケモンをスカウトしてください。")+'</div><button class="g9-primary" data-g9="start" '+(!roster.length||busy?"disabled":"")+'>'+(busy?"準備中…":"全世代CPU対戦を開始")+'</button><p>CPUチーム生成・技や特性の効果判定・ダメージ計算は端末内で実行します。オンライン対戦のみ相手との同期にWebSocketを使用します。</p></section><section class="g9-card"><h2>対戦ルール</h2><div class="g9-spec"><span>図鑑</span><b>第1〜9世代（National Dex）</b></div><div class="g9-spec"><span>形式</span><b>シングル 6対6</b></div><div class="g9-spec"><span>ルール</span><b>Gen 9 National Dex AG</b></div><div class="g9-spec"><span>ギミック</span><b>メガシンカ・テラスタル</b></div><p>大会向けの使用制限を外した全国図鑑ルールです。ダイマックスも同じ試合に混ぜるにはShowdown本体の追加改造が必要です。</p></section></div><button class="g9-secondary" data-g9="diagnose" '+(diagnosticBusy?"disabled":"")+'>'+(diagnosticBusy?"診断中…":"不具合を診断する")+'</button>'+(diagnosticReport?'<pre class="g9-diagnostic">'+esc(diagnosticReport)+'</pre>':"")+renderOnlinePanel()+(errorText?'<div class="g9-error">'+esc(errorText)+'</div>':"")+'</section>';
     }
     const req=session.request||{},active=req.active?.[0]||{},list=req.side?.pokemon||[];
     const activeIndex=list.findIndex(x=>x.active),mon=activeIndex>=0?list[activeIndex]:null;
@@ -332,33 +360,49 @@
     try{
       const playerTeam=buildTeam();
       if(!playerTeam.length)throw new Error("先にポケモンをスカウトしてください。");
-      if(playerTeam.some(m=>!m.moves.length))throw new Error("技を覚えていないポケモンがいます。先に技を設定してください。");
-      team=selectedOwned();busy=true;repaint();
-      const x=await api("/battles",{method:"POST",body:JSON.stringify({playerTeam,playerName:"プレイヤー"})});
-      session={...x,logs:x.logs||[],playerName:"プレイヤー"};gimmick="";
-    }catch(e){
-      errorText=e.message||String(e);
-      diagnosticReport="対戦開始に失敗したため、自動診断を実行します…";
+      if(playerTeam.some(mon=>!mon.moves.length))throw new Error("技を覚えていないポケモンがいます。先に技を設定してください。");
+      team=selectedOwned();
+      busy=true;
       repaint();
-      void runDiagnostic();
+      const result=await localEngineCall("start",{playerTeam,playerName:"プレイヤー"});
+      session={...result,logs:result.logs||[],kind:"cpu",playerName:"プレイヤー"};
+      opponentName="CPU";
+      gimmick="";
+    }catch(error){
+      errorText=error?.message||String(error);
+      diagnosticReport="ローカルCPU対戦の開始に失敗しました。『不具合を診断する』でブラウザ内エンジンを確認できます。";
+    }finally{
+      busy=false;
+      repaint();
     }
-    finally{busy=false;repaint();}
   }
   async function act(action){
     if(!session||busy||waitingForOpponent||session.done)return;
-    busy=true;errorText="";repaint();
+    busy=true;
+    errorText="";
+    repaint();
     if(session.kind==="online"){
       try{
         if(!onlineSocket||onlineSocket.readyState!==WebSocket.OPEN)throw new Error("オンライン接続が切れています。");
         onlineSocket.send(JSON.stringify({type:"gen9-action",action}));
         return;
-      }catch(e){errorText=e.message||String(e);busy=false;repaint();return;}
+      }catch(error){
+        errorText=error.message||String(error);
+        busy=false;
+        repaint();
+        return;
+      }
     }
     try{
-      const x=await api("/battles/"+encodeURIComponent(session.battleId)+"/action",{method:"POST",body:JSON.stringify({token:session.token,action,cursor:session.logCursor||0})});
-      session={...session,...x,logs:[...(session.logs||[]),...(x.logs||[])]};gimmick="";
-    }catch(e){errorText=e.message||String(e);}
-    finally{busy=false;repaint();}
+      const result=await localEngineCall("action",{action,cursor:session.logCursor||0});
+      session={...session,...result,kind:"cpu",logs:[...(session.logs||[]),...(result.logs||[])]};
+      gimmick="";
+    }catch(error){
+      errorText=error?.message||String(error);
+    }finally{
+      busy=false;
+      repaint();
+    }
   }
   async function leave(){
     if(onlineSocket){
@@ -368,9 +412,20 @@
       }
       onlineSocket=null;
     }else if(session?.kind!=="online"&&session){
-      try{await api("/battles/"+encodeURIComponent(session.battleId)+"?token="+encodeURIComponent(session.token),{method:"DELETE"});}catch(_){}
+      try{await localEngineCall("stop");}catch(_){}
     }
-    session=null;team=[];busy=false;gimmick="";waitingForOpponent=false;onlineRoomCode="";onlineStatus="";errorText="";randomSearching=false;onlineMode="private";open();
+    if(session?.kind!=="online")stopLocalWorker();
+    session=null;
+    team=[];
+    busy=false;
+    gimmick="";
+    waitingForOpponent=false;
+    onlineRoomCode="";
+    onlineStatus="";
+    errorText="";
+    randomSearching=false;
+    onlineMode="private";
+    open();
   }
   function installNav(){
     const sidebar=document.querySelector(".sidebar"),battle=sidebar?.querySelector('[data-page="battle"]');
@@ -429,24 +484,28 @@ document.head.appendChild(onlineCss);
     else if(kind==="switch")void act({switchTo:Number(b.dataset.index)});
   },true);
   installNav();
-  api("/health").then(data=>console.info("[v28] National Dex battle server ready",data)).catch(e=>console.warn("[v28] National Dex battle server unavailable",e));
-  api("/catalog").then(catalog=>{
-    const data=S()?.data;
-    if(!data||!Array.isArray(catalog.items))return;
-    const itemsById=Object.fromEntries(catalog.items.filter(item=>item?.id&&item?.name).map(item=>[item.id,item]));
-    data.showdownCatalog={itemsById,items:catalog.items};
-    data.itemsById=itemsById;
-    data.itemsList=catalog.items;
-    data.itemsSource="pokemon-showdown-server";
-    if(data.upstreamMechanics&&typeof data.upstreamMechanics==="object"){
-      data.upstreamMechanics.itemsById=itemsById;
-    }
-    const status=document.getElementById("upstream-fetch-status");
-    if(status&&!status.textContent.includes("持ち物")){
-      status.textContent += " · Showdown持ち物 "+catalog.items.length+"件";
-    }
-    console.info("[v27] Showdown item catalog loaded:",catalog.items.length);
-  }).catch(error=>console.warn("[v27] Showdown item catalog unavailable:",error));
-W.PokemonChampions2DGen9={version:"30.0.0",format:"gen9nationaldexag",engine:"pokemon-showdown",dex:"National Dex",mechanics:["Mega Evolution","Terastallization"],open,createOnlineRoom,joinOnlineRoom};
-console.info("[v30.0] National Dex battle UI bridge and matchmaking loaded.");
+  fetch("./data/showdown-catalog.json",{cache:"force-cache"})
+    .then(response=>{
+      if(!response.ok)throw new Error("ローカルShowdownカタログを読み込めません。");
+      return response.json();
+    })
+    .then(catalog=>{
+      const data=S()?.data;
+      if(!data||!Array.isArray(catalog.items))return;
+      const itemsById=Object.fromEntries(catalog.items.filter(item=>item?.id&&item?.name).map(item=>[item.id,item]));
+      data.showdownCatalog={itemsById,items:catalog.items};
+      data.itemsById=itemsById;
+      data.itemsList=catalog.items;
+      data.itemsSource="local-showdown-data";
+      if(data.upstreamMechanics&&typeof data.upstreamMechanics==="object"){
+        data.upstreamMechanics.itemsById=itemsById;
+      }
+      const status=document.getElementById("upstream-fetch-status");
+      if(status&&!status.textContent.includes("持ち物")){
+        status.textContent+=" · 内蔵Showdown持ち物 "+catalog.items.length+"件";
+      }
+      console.info("[v31] Local Showdown item catalog loaded:",catalog.items.length);
+    }).catch(error=>console.warn("[v31] Local Showdown catalog unavailable:",error));
+  W.PokemonChampions2DGen9={version:"31.0.0",format:"gen9nationaldexag",engine:"@pkmn/sim browser worker",cpu:"local",online:"server WebSocket",dex:"National Dex",mechanics:["Mega Evolution","Terastallization"],open,createOnlineRoom,joinOnlineRoom};
+console.info("[v31.0] Local National Dex simulator and online matchmaking loaded.");
 })();
