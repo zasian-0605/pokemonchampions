@@ -1,4 +1,4 @@
-import {BattleStreams, Dex, TeamValidator, Teams, toID} from "@pkmn/sim";
+import {Battle, Dex, TeamValidator, Teams, toID} from "@pkmn/sim";
 import {TeamGenerators} from "@pkmn/randoms";
 
 const FORMAT_ID = "gen9nationaldexag";
@@ -191,67 +191,69 @@ function waitFor(session, predicate, timeoutMs = REQUEST_TIMEOUT_MS) {
   });
 }
 
-async function consume(session) {
-  try {
-    for await (const outputValue of session.stream) {
-      const output = String(outputValue || "");
-      if (output.startsWith("update\n")) {
-        const rawLines = output.slice(7).split("\n");
-        const lines = [];
-        for (let index = 0; index < rawLines.length; index++) {
-          const line = rawLines[index];
-          if (line.startsWith("|split|")) {
-            index++;
-            if (index + 1 < rawLines.length) {
-              const publicLine = rawLines[++index];
-              if (publicLine.startsWith("|")) lines.push(publicLine);
-            }
-            continue;
-          }
-          if (line.startsWith("|")) lines.push(line);
+function receiveBattleMessage(session, type, data) {
+  const body = Array.isArray(data) ? data.join("\n") : String(data == null ? "" : data);
+
+  if (type === "update") {
+    const rawLines = body.split("\n");
+    const lines = [];
+    for (let index = 0; index < rawLines.length; index++) {
+      const line = rawLines[index];
+      if (line.startsWith("|split|")) {
+        index++;
+        if (index + 1 < rawLines.length) {
+          const publicLine = rawLines[++index];
+          if (publicLine.startsWith("|")) lines.push(publicLine);
         }
-        session.logs.push(...lines);
-        if (session.logs.length > 600) session.logs.splice(0, session.logs.length - 600);
-        for (const line of lines) {
-          if (line.startsWith("|win|")) {
-            session.done = true;
-            session.winner = line.split("|")[2] || "";
-          } else if (line.startsWith("|tie")) {
-            session.done = true;
-            session.winner = "tie";
-          }
-        }
-      } else if (output.startsWith("sideupdate\n")) {
-        const body = output.slice(11);
-        const splitAt = body.indexOf("\n");
-        if (splitAt >= 0) {
-          const side = body.slice(0, splitAt).trim();
-          const payload = body.slice(splitAt + 1);
-          if (side === "p1" || side === "p2") {
-            for (const line of payload.split("\n")) {
-              if (line.startsWith("|request|")) {
-                try {
-                  session.requests[side] = JSON.parse(line.slice(9));
-                  session.requestVersion[side]++;
-                } catch (_) {
-                  session.error = "Showdownの行動リクエストを読み取れませんでした。";
-                }
-              } else if (line.startsWith("|error|")) {
-                session.error = line.slice(7);
-              }
+        continue;
+      }
+      if (line.startsWith("|")) lines.push(line);
+    }
+    session.logs.push(...lines);
+    if (session.logs.length > 600) session.logs.splice(0, session.logs.length - 600);
+    for (const line of lines) {
+      if (line.startsWith("|win|")) {
+        session.done = true;
+        session.winner = line.split("|")[2] || "";
+      } else if (line.startsWith("|tie")) {
+        session.done = true;
+        session.winner = "tie";
+      }
+    }
+  } else if (type === "sideupdate") {
+    const splitAt = body.indexOf("\n");
+    if (splitAt >= 0) {
+      const side = body.slice(0, splitAt).trim();
+      const payload = body.slice(splitAt + 1);
+      if (side === "p1" || side === "p2") {
+        for (const line of payload.split("\n")) {
+          if (line.startsWith("|request|")) {
+            try {
+              session.requests[side] = JSON.parse(line.slice(9));
+              session.requestVersion[side]++;
+            } catch (_) {
+              session.error = "Showdownの行動リクエストを読み取れませんでした。";
             }
+          } else if (line.startsWith("|error|")) {
+            session.error = line.slice(7);
           }
         }
       }
-      session.lastActive = Date.now();
-      notify(session);
     }
-  } catch (error) {
-    session.error = error?.message || String(error);
-    session.done = true;
-    notify(session);
+  } else if (type === "end") {
+    try {
+      const result = JSON.parse(body);
+      session.done = true;
+      session.winner = result.winner || null;
+    } catch (_) {
+      session.done = true;
+    }
   }
+
+  session.lastActive = Date.now();
+  notify(session);
 }
+
 
 function snapshot(session, cursor = 0) {
   const start = Math.max(0, Math.min(session.logs.length, Math.floor(Number(cursor) || 0)));
@@ -270,11 +272,10 @@ function snapshot(session, cursor = 0) {
 }
 
 async function createSession(playerTeam, opponentTeam, playerName, opponentName) {
-  const stream = new BattleStreams.BattleStream({keepAlive:true});
   const session = {
     id:randomId(),
     token:randomId(),
-    stream,
+    battle:null,
     requests:{p1:null,p2:null},
     requestVersion:{p1:0,p2:0},
     logs:[],
@@ -284,38 +285,62 @@ async function createSession(playerTeam, opponentTeam, playerName, opponentName)
     waiters:new Set(),
     createdAt:Date.now(),
     lastActive:Date.now(),
+    phase:"Showdownエンジン初期化",
     playerName:String(playerName || "プレイヤー"),
     opponentName:String(opponentName || "CPU")
   };
-  void consume(session);
+
   try {
-    await stream.write(">start " + JSON.stringify({formatid:FORMAT_ID}));
-    await stream.write(">player p1 " + JSON.stringify({name:session.playerName,team:playerTeam}));
-    await stream.write(">player p2 " + JSON.stringify({name:session.opponentName,team:opponentTeam}));
+    session.battle = new Battle({
+      formatid:FORMAT_ID,
+      send:(type, data) => receiveBattleMessage(session, type, data)
+    });
+
+    // Flush the initial Showdown log before registering the two players.
+    session.battle.sendUpdates();
+
+    session.phase = "プレイヤーチーム登録";
+    session.battle.setPlayer("p1", {name:session.playerName, team:playerTeam});
+    session.battle.sendUpdates();
+
+    session.phase = "CPUチーム登録・対戦開始";
+    session.battle.setPlayer("p2", {name:session.opponentName, team:opponentTeam});
+    session.battle.sendUpdates();
+
+    session.phase = "初期行動リクエスト取得";
     await waitFor(session, () => !!session.requests.p1 && !!session.requests.p2);
+
     if (session.requests.p1?.teamPreview || session.requests.p2?.teamPreview) {
-      await stream.write(">p1 team " + playerTeam.map((_, index) => index + 1).join(""));
-      await stream.write(">p2 team " + opponentTeam.map((_, index) => index + 1).join(""));
+      session.phase = "チーム選出";
+      session.battle.choose("p1", "team " + playerTeam.map((_, index) => index + 1).join(""));
+      session.battle.choose("p2", "team " + opponentTeam.map((_, index) => index + 1).join(""));
+      session.battle.sendUpdates();
       await waitFor(session, () =>
         !!session.requests.p1 && !!session.requests.p2 &&
         !session.requests.p1.teamPreview && !session.requests.p2.teamPreview
       );
     }
+
+    session.phase = "対戦準備完了";
     session.lastActive = Date.now();
     return session;
   } catch (error) {
+    const message = error?.message || String(error);
+    const phase = session.phase;
     destroySession(session);
-    throw error;
+    throw new Error(phase + "で失敗: " + message);
   }
 }
+
 
 function destroySession(session) {
   if (!session) return;
   if (!session.error && !session.done) session.error = "このバトルセッションは終了しました。";
   notify(session);
-  try { session.stream.writeEnd(); } catch (_) {}
-  try { session.stream.destroy?.(); } catch (_) {}
+  try { session.battle?.destroy(); } catch (_) {}
+  session.battle = null;
 }
+
 
 function buildChoice(session, action) {
   const request = session.requests.p1;
@@ -398,15 +423,23 @@ async function startBattle(payload) {
     destroySession(currentSession);
     currentSession = null;
   }
-  const playerTeam = normalizeTeam(payload.playerTeam);
-  const opponentTeam = Teams.generate("gen9randombattle");
-  if (!Array.isArray(opponentTeam) || opponentTeam.length !== 6) {
-    throw new Error("CPUチームを生成できませんでした。");
+  let phase = "プレイヤーチーム検証";
+  try {
+    const playerTeam = normalizeTeam(payload.playerTeam);
+    phase = "CPUランダムチーム生成";
+    const opponentTeam = Teams.generate("gen9randombattle");
+    if (!Array.isArray(opponentTeam) || opponentTeam.length !== 6) {
+      throw new Error("CPUチームを生成できませんでした。");
+    }
+    phase = "Showdown対戦開始";
+    const session = await createSession(playerTeam, opponentTeam, payload.playerName || "プレイヤー", "CPU");
+    currentSession = session;
+    return snapshot(session);
+  } catch (error) {
+    throw new Error(phase + "で失敗: " + (error?.message || String(error)));
   }
-  const session = await createSession(playerTeam, opponentTeam, payload.playerName || "プレイヤー", "CPU");
-  currentSession = session;
-  return snapshot(session);
 }
+
 
 async function submitAction(payload) {
   const session = currentSession;
@@ -415,8 +448,10 @@ async function submitAction(payload) {
   const p1Version = session.requestVersion.p1;
   const playerChoice = buildChoice(session, payload.action || {});
   const cpuChoice = chooseCpuAction(session.requests.p2);
-  await session.stream.write(">p1 " + playerChoice);
-  if (cpuChoice) await session.stream.write(">p2 " + cpuChoice);
+  session.phase = "ターン処理";
+  session.battle.choose("p1", playerChoice);
+  if (cpuChoice) session.battle.choose("p2", cpuChoice);
+  session.battle.sendUpdates();
   await waitFor(session, () =>
     session.done || (
       session.requestVersion.p1 > p1Version &&
@@ -427,6 +462,7 @@ async function submitAction(payload) {
   session.lastActive = Date.now();
   return snapshot(session, payload.cursor);
 }
+
 
 function getCounts() {
   const count = table => table.all().filter(item => item && item.exists).length;
@@ -439,22 +475,35 @@ function getCounts() {
 }
 
 async function diagnose(payload) {
-  const playerTeam = normalizeTeam(payload.playerTeam);
-  const opponentTeam = Teams.generate("gen9randombattle");
-  const temp = await createSession(playerTeam, opponentTeam, "診断テスト", "CPU");
-  const result = {
-    ok:true,
-    engine:"@pkmn/sim (ブラウザ内Showdownシミュレーター)",
-    format:FORMAT_ID,
-    formatName:Dex.formats.get(FORMAT_ID).name,
-    counts:getCounts(),
-    opponentTeamSize:opponentTeam.length,
-    initialRequestReady:!!temp.requests.p1 && !!temp.requests.p2 &&
-      !temp.requests.p1.teamPreview && !temp.requests.p2.teamPreview
-  };
-  destroySession(temp);
-  return result;
+  let phase = "プレイヤーチーム検証";
+  let temp = null;
+  try {
+    const playerTeam = normalizeTeam(payload.playerTeam);
+    phase = "CPUランダムチーム生成";
+    const opponentTeam = Teams.generate("gen9randombattle");
+    if (!Array.isArray(opponentTeam) || opponentTeam.length !== 6) {
+      throw new Error("CPUチームを生成できませんでした。");
+    }
+    phase = "Showdown Battleインスタンス作成";
+    temp = await createSession(playerTeam, opponentTeam, "診断テスト", "CPU");
+    const result = {
+      ok:true,
+      engine:"@pkmn/sim Battle API（ブラウザWorker内の直接実行）",
+      format:FORMAT_ID,
+      formatName:Dex.formats.get(FORMAT_ID).name,
+      counts:getCounts(),
+      opponentTeamSize:opponentTeam.length,
+      initialRequestReady:!!temp.requests.p1 && !!temp.requests.p2 &&
+        !temp.requests.p1.teamPreview && !temp.requests.p2.teamPreview
+    };
+    destroySession(temp);
+    return result;
+  } catch (error) {
+    if (temp) destroySession(temp);
+    throw new Error(phase + "で失敗: " + (error?.message || String(error)));
+  }
 }
+
 
 async function dispatch(type, payload) {
   if (type === "start") return startBattle(payload || {});

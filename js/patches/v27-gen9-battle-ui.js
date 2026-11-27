@@ -1,4 +1,4 @@
-/* v31: Browser-local Showdown CPU engine; online matches remain server synchronized. */
+/* v32: Browser-local Showdown CPU engine; online matches remain server synchronized. */
 (() => {
   "use strict";
   const W=window, APP=()=>W.PokemonChampions2D, S=()=>APP()?.state;
@@ -18,7 +18,7 @@
   function getLocalWorker(){
     if(localWorker)return localWorker;
     if(typeof Worker!=="function")throw new Error("このブラウザはローカル対戦Workerに対応していません。");
-    const worker=new Worker("/js/gen9-local-engine.worker.js?v=31.0.0");
+    const worker=new Worker("/js/gen9-local-engine.worker.js?v=32.0.0");
     worker.onmessage=event=>{
       const message=event.data||{};
       const pending=localWorkerPending.get(message.id);
