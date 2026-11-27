@@ -12,7 +12,8 @@
     "postinstall": "node scripts/build-browser-gen9.js",
     "test:browser-gen9": "node scripts/test-browser-gen9.js",
     "test:battle-ui": "node scripts/test-battle-ui.js",
-    "test:runtime-overrides": "node scripts/test-runtime-overrides.js"
+    "test:runtime-overrides": "node scripts/test-runtime-overrides.js",
+    "test:cpu-difficulty": "node scripts/test-cpu-difficulty.js"
   },
   "engines": {
     "node": ">=22.18.0"
