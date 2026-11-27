@@ -697,17 +697,31 @@ const server = http.createServer((req,res) => {
   let file = target;
   try {
     if (fs.statSync(file).isDirectory()) file = path.join(file,"index.html");
-    const stat = fs.statSync(file);
-    if (!stat.isFile()) throw new Error("Not a file");
     const ext = path.extname(file).toLowerCase();
-    res.writeHead(200,{
+    let servedFile = file;
+    let contentEncoding = "";
+    if (ext === ".js" && /\\bgzip\\b/i.test(String(req.headers["accept-encoding"] || ""))) {
+      const gzipFile = file + ".gz";
+      try {
+        if (fs.statSync(gzipFile).isFile()) {
+          servedFile = gzipFile;
+          contentEncoding = "gzip";
+        }
+      } catch (_) {}
+    }
+    const stat = fs.statSync(servedFile);
+    if (!stat.isFile()) throw new Error("Not a file");
+    const headers = {
       "Content-Type":MIME[ext] || "application/octet-stream",
       "Content-Length":stat.size,
       "Cache-Control":ext === ".html" ? "no-cache" : "public, max-age=1800",
       "X-Content-Type-Options":"nosniff"
-    });
+    };
+    if (ext === ".js") headers["Vary"] = "Accept-Encoding";
+    if (contentEncoding) headers["Content-Encoding"] = contentEncoding;
+    res.writeHead(200,headers);
     if (req.method === "HEAD") { res.end(); return; }
-    fs.createReadStream(file).pipe(res);
+    fs.createReadStream(servedFile).pipe(res);
   } catch (_) {
     res.writeHead(404,{"Content-Type":"text/plain; charset=utf-8"});
     res.end("Not Found");
