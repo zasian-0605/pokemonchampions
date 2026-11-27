@@ -1,0 +1,41 @@
+/* v34 battle UI fixes */
+.main-content,.battle-shell,.battle-stage,.battlefield,.player-hp-strip,.battle-command{overflow-anchor:none}
+.battle-shell{overflow:visible}
+.battle-shell .battle-stage{position:relative;overflow:hidden}
+.battle-shell .player-hp-strip{position:relative;z-index:2;flex:0 0 auto;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:8px;border:1px solid #293755;border-radius:12px}
+.player-hp-card{min-width:0}
+.player-hp-card:only-child{grid-column:1/-1}
+.player-battle-meta{display:flex;flex-wrap:wrap;gap:4px 9px;margin-top:7px;color:#9fafcf;font-size:9px;line-height:1.45}
+.player-battle-meta>span{min-width:0;overflow-wrap:anywhere}
+.battle-info-meta,.battle-info-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;color:#b5c2df;font-size:8px;line-height:1.4}
+.battle-info-meta>span{overflow-wrap:anywhere}
+.battle-info-chip{display:inline-flex;align-items:center;padding:2px 5px;border:1px solid #ffffff20;border-radius:5px;background:#1b2944;color:#dce7ff;font-size:8px;font-weight:800;line-height:1.35}
+.battle-info-chip.highlight{border-color:#e4c36b88;background:#5c482b;color:#ffe6a4}
+.battle-command{width:min(430px,52%);max-height:calc(100% - 20px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.command-main .battle-action-row{position:sticky;top:0;z-index:5;margin:0 0 8px;padding:6px;border:1px solid #83a9df44;border-radius:10px;background:linear-gradient(135deg,#101a2ff5,#172541f5);box-shadow:0 5px 18px #0006}
+.command-main .battle-action-row .btn-primary{flex:1 1 100%;min-height:40px;font-weight:900}
+.command-main>.double-action-status{display:grid!important;position:sticky;bottom:0;z-index:5;gap:6px;margin-top:8px;padding:8px;border:1px solid #62d6fa66;border-radius:10px;background:linear-gradient(135deg,#0c2637f5,#12253df5);box-shadow:0 -5px 20px #0008}
+.double-action-status .btn{min-height:42px;font-weight:900;white-space:normal}
+@media(max-width:850px){
+ .battle-shell{height:auto;min-height:0;max-height:none;overflow:visible}
+ .battle-shell>.battle-stage{height:clamp(420px,64dvh,620px);min-height:420px;max-height:620px;flex:0 0 auto}
+ .battle-shell .player-hp-strip{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:8px}
+ .battle-command{right:8px;bottom:8px;width:min(370px,66%);max-height:calc(100% - 16px)}
+}
+@media(max-width:550px){
+ .battle-shell>.battle-stage{height:clamp(420px,66dvh,560px);min-height:420px}
+ .battle-command{right:6px;bottom:6px;width:min(350px,78%);max-height:calc(100% - 12px)}
+ .command-main{padding:8px}
+ .command-main>.action-row{gap:6px;margin-top:6px}
+ .command-main>.action-row .btn{padding:7px 8px;font-size:9px}
+ .battle-shell .player-hp-strip{grid-template-columns:1fr}
+ .player-hp-card .name-level b{font-size:10px}
+ .player-hp-card .hp-numbers{gap:4px;margin:5px 0 3px;font-size:9px}
+ .player-hp-card .hp-track{height:7px}
+ .player-battle-meta{font-size:8px;gap:3px 6px}
+ .combat-info{min-width:132px;max-width:min(190px,48vw);padding:7px 8px}
+ .combat-info .name-level b{font-size:11px}
+ .combat-info .hp-numbers{font-size:9px;margin:5px 0 3px}
+ .battle-info-meta,.battle-info-tags{font-size:7px}
+}
+@media(max-width:390px){.battle-command{width:82%}}

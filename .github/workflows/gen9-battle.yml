@@ -20,6 +20,7 @@ jobs:
         run: npm install
       - name: Check server and data exporter syntax
         run: |
+          node --check js/app.js
           node --check server/index.js
           node --check server/gen9-engine.js
           node --check server/auto-audit.js
