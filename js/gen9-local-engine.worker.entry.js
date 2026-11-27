@@ -23,7 +23,7 @@ const JP_ITEM_ALIASES = {
   "いのちのたま":"lifeorb","きあいのタスキ":"focussash","たべのこし":"leftovers",
   "オボンのみ":"sitrusberry","ゴツゴツメット":"rockyhelmet","とつげきチョッキ":"assaultvest",
   "あつぞこブーツ":"heavydutyboots","ブーツ":"heavydutyboots","ブーストエナジー":"boosterenergy",
-  "ラムのみ":"lumberry","きせきのタね":"eviolite","メンタルハーブ":"mentalherb",
+  "ラムのみ":"lumberry","きせきのタネ":"miracleseed","メンタルハーブ":"mentalherb",
   "じゃくてんほけん":"weaknesspolicy"
 };
 
