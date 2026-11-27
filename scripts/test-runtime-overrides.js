@@ -76,8 +76,25 @@ assert.ok(itemPatch.includes("num(stock[it.id])") && itemPatch.includes("n<1&&cu
   'unowned generic items must not appear in the training selector');
 assert.ok(itemPatch.includes("W.findMegaForm?.({...mon,heldItem:it.id})"),
   'Mega Stone options must be restricted to matching Mega forms');
-assert.ok(itemPatch.includes("if(old&&!megaMap().has(old))") && itemPatch.includes("if(next&&!megaMap().has(next))"),
-  'ordinary held items must transfer between the bag and the Pokémon');
+assert.ok(itemPatch.includes("function transferHeldStock(stock,oldId,newId)") &&
+  itemPatch.includes("function undoReturnedMegaStone(stock,oldId,newId)"),
+  'ordinary held items and Mega Stones must use the centralized stock transfer helpers');
+const helperStart = itemPatch.indexOf('function transferHeldStock');
+const helperEnd = itemPatch.indexOf('function optionsFor', helperStart);
+assert.ok(helperStart >= 0 && helperEnd > helperStart, 'item stock transfer helpers must be extractable');
+const helperContext = { num: value => Math.max(0,Math.floor(Number(value)||0)), megaMap: () => new Map([['charizarditex',{}]]) };
+const stockHelpers = vm.runInNewContext(itemPatch.slice(helperStart,helperEnd) +
+  '\\n({transferHeldStock,undoReturnedMegaStone})', helperContext);
+const sampleStock = {choicespecs:1,lifeorb:1,charizarditex:0};
+stockHelpers.transferHeldStock(sampleStock,'choicespecs','lifeorb');
+assert.equal(sampleStock.choicespecs,2);
+assert.equal(sampleStock.lifeorb,0);
+stockHelpers.transferHeldStock(sampleStock,'charizarditex','choicespecs');
+assert.equal(sampleStock.charizarditex,0);
+assert.equal(sampleStock.choicespecs,1);
+sampleStock.charizarditex=1;
+stockHelpers.undoReturnedMegaStone(sampleStock,'charizarditex','choicespecs');
+assert.equal(sampleStock.charizarditex,0);
 assert.ok(itemPatch.includes("new Map()") && itemPatch.includes("function catalogue()"),
   'the shop must use one deduplicated item catalogue');
 assert.ok(itemPatch.includes('data-action="v30-buy-item"'),
