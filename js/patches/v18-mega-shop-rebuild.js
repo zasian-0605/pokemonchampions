@@ -7,7 +7,7 @@
  renderShop=function(){
   const html=String(previousRenderShop.apply(this,arguments)||'');
   const clearButton='<button type="button" class="btn btn-ghost" data-action="clear-mega-shop-search">検索解除</button>';
-  return html.replace(/(<div class="search-row">[\\s\\S]*?)(<\\/div>)(\\s*<div class="shop-grid)/, '$1'+clearButton+'$2$3');
+  return html.replace(/(<div class="search-row">[\s\S]*?)(<\/div>)(\s*<div class="shop-grid)/, '$1'+clearButton+'$2$3');
  };
  const previousHandleAction=handleAction;
  handleAction=async function(action,el){
