@@ -27,12 +27,16 @@ const JP_ITEM_ALIASES = {
   "じゃくてんほけん":"weaknesspolicy"
 };
 
-Dex.formats.extend([{
-  name:"[Gen 9] National Dex AG",
-  mod:"gen9",
-  searchShow:false,
-  ruleset:["Standard AG","NatDex Mod"]
-}]);
+// @pkmn/sim may already bundle this format. Register it only when it is absent;
+// extending an existing ID throws during Worker startup and prevents every CPU match.
+if (!Dex.formats.get(FORMAT_ID)?.exists) {
+  Dex.formats.extend([{
+    name:"[Gen 9] National Dex AG",
+    mod:"gen9",
+    searchShow:false,
+    ruleset:["Standard AG","NatDex Mod"]
+  }]);
+}
 Teams.setGeneratorFactory(TeamGenerators);
 
 let currentSession = null;
