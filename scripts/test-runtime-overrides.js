@@ -68,6 +68,8 @@ const itemPatch = read('js/patches/v30-item-inventory.js');
 const itemNames = JSON.parse(read('data/item-names-ja.json'));
 const page = read('index.html');
 assert.equal(itemNames.choicespecs, 'こだわりメガネ', 'Choice Specs must have its official Japanese name');
+assert.equal(itemNames.miracleberry, 'きせきのみ', 'legacy Berry names must use Japanese localization');
+assert.equal(itemNames.polkadotbow, 'みずたまりボン', 'legacy held item names must be localized');
 assert.ok(page.indexOf('js/item-names-ja.js') < page.indexOf('js/patches/v30-item-inventory.js'),
   'Japanese item names must load before the inventory patch');
 assert.ok(itemPatch.includes("num(stock[it.id])") && itemPatch.includes("n<1&&current!==it.id"),
@@ -80,6 +82,7 @@ assert.ok(itemPatch.includes("new Map()") && itemPatch.includes("function catalo
   'the shop must use one deduplicated item catalogue');
 assert.ok(itemPatch.includes('data-action="v30-buy-item"'),
   'the unified shop must provide a purchase action');
+assert.ok(itemPatch.includes("if(id==='vilevial')return false"), 'unsupported custom item must not enter the official held-item shop');
 
 // Parse every browser patch without executing it; this catches syntax errors outside app.js too.
 const patchDir = path.join(root, 'js', 'patches');
