@@ -26,6 +26,8 @@ jobs:
           node --check server/auto-audit.js
           node --check scripts/export-showdown-catalog.js
           node --check js/upstream-loader.js
+      - name: Audit battle timers and browser patch ownership
+        run: npm run test:runtime-overrides
       - name: Rebuild and validate committed catalogue
         run: npm run data:export
       - name: Run Generation 9 simulator smoke test
