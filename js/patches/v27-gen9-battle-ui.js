@@ -1,7 +1,9 @@
-/* v32: Browser-local Showdown CPU engine; online matches remain server synchronized. */
+/* v33: Keep Showdown, resolve worker URLs relative to this script, and fall back to the built-in battle. */
 (() => {
   "use strict";
   const W=window, APP=()=>W.PokemonChampions2D, S=()=>APP()?.state;
+  const PATCH_SCRIPT_URL=document.currentScript?.src||document.baseURI;
+  const GEN9_WORKER_URL=new URL("../gen9-local-engine.worker.js?v=33.0.0",PATCH_SCRIPT_URL).href;
   const statusJa={brn:"やけど",par:"まひ",slp:"ねむり",frz:"こおり",psn:"どく",tox:"もうどく"};
   let session=null, team=[], busy=false, errorText="", gimmick="", onlineSocket=null, onlineRoomCode="", onlineStatus="", waitingForOpponent=false, opponentName="CPU", diagnosticBusy=false, diagnosticReport="", randomSearching=false, onlineMode="private";
   const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -18,7 +20,7 @@
   function getLocalWorker(){
     if(localWorker)return localWorker;
     if(typeof Worker!=="function")throw new Error("このブラウザはローカル対戦Workerに対応していません。");
-    const worker=new Worker("/js/gen9-local-engine.worker.js?v=32.0.0");
+    const worker=new Worker(GEN9_WORKER_URL);
     worker.onmessage=event=>{
       const message=event.data||{};
       const pending=localWorkerPending.get(message.id);
@@ -34,17 +36,23 @@
       if(localWorker===worker)localWorker=null;
       worker.terminate();
     };
+    worker.onmessageerror=()=>{
+      const error=new Error("ローカル対戦エンジンとのメッセージ通信に失敗しました。");
+      rejectLocalWorkerPending(error);
+      if(localWorker===worker)localWorker=null;
+      worker.terminate();
+    };
     localWorker=worker;
     return worker;
   }
-  function localEngineCall(type,payload){
+  function localEngineCall(type,payload,timeoutMs=90000){
     const worker=getLocalWorker();
     const id=++localWorkerSequence;
     return new Promise((resolve,reject)=>{
       const timer=setTimeout(()=>{
         localWorkerPending.delete(id);
-        reject(new Error("ローカル対戦エンジンが応答しません。ページを再読み込みして再試行してください。"));
-      },90000);
+        reject(new Error("ローカル対戦エンジンが"+Math.round(timeoutMs/1000)+"秒以内に応答しませんでした。"));
+      },timeoutMs);
       localWorkerPending.set(id,{resolve,reject,timer});
       try{worker.postMessage({id,type,...(payload||{})});}
       catch(error){
@@ -59,6 +67,47 @@
     localWorker=null;
     if(worker)worker.terminate();
     rejectLocalWorkerPending(new Error("ローカル対戦を終了しました。"));
+  }
+  function switchToStandardBattle(message){
+    const app=APP(),s=S();
+    if(!app||!s)return false;
+    const chosen=selectedOwned();
+    if(chosen.length)s.team=chosen.map(mon=>mon.uid).filter(Boolean);
+    if(onlineSocket){
+      try{
+        if(onlineSocket.readyState===WebSocket.OPEN){
+          onlineSocket.send(JSON.stringify({type:randomSearching?"random-match-cancel":"leave-gen9-room"}));
+        }
+      }catch(_){}
+      try{onlineSocket.close();}catch(_){}
+      onlineSocket=null;
+    }
+    randomSearching=false;
+    waitingForOpponent=false;
+    onlineRoomCode="";
+    onlineStatus="";
+    stopLocalWorker();
+    session=null;
+    team=[];
+    busy=false;
+    gimmick="";
+    errorText="";
+    document.querySelectorAll("[data-gen9-page]").forEach(button=>button.classList.remove("active"));
+    try{
+      if(typeof W.setPage==="function")W.setPage("battle");
+      else{s.page="battle";if(typeof W.renderPage==="function")W.renderPage();}
+    }catch(_){
+      s.page="battle";
+      try{W.renderPage?.();}catch(__){}
+    }
+    if(s.page!=="battle")return false;
+    if(typeof W.toast==="function")W.toast(message||"通常バトルへ切り替えました。","warn");
+    return true;
+  }
+  function shouldFallbackToStandardBattle(error){
+    const message=String(error?.message||error||"");
+    if(/プレイヤーチーム検証で失敗/.test(message))return false;
+    return /(Worker|MessagePort|unreachable|ローカル対戦エンジン|Showdown対戦開始|CPUランダムチーム生成|応答しません|タイムアウト)/i.test(message);
   }
   function selectedOwned(){
     const s=S(); if(!s)return [];
@@ -197,7 +246,7 @@
     if(!session){
       const roster=buildTeam();
       const items=roster.map((m,i)=>'<div class="g9-team"><span>'+(i+1)+'</span><b>'+esc(m.name||m.species)+'</b><small>Lv.'+m.level+' · '+m.moves.length+'技</small></div>').join("");
-      return '<section class="g9"><header><div><small>LOCAL SHOWDOWN ENGINE · NATIONAL DEX</small><h1>全世代バトル</h1><p>第1〜9世代のデータを内蔵したShowdownエンジンがブラウザ内で動作します。CPU戦の対戦計算にサーバーAPIは使いません。</p></div><b class="g9-badge">GEN 1–9</b></header><div class="g9-columns"><section class="g9-card"><h2>自分のチーム</h2><p>編成画面で選んだチームを使います。未選択ならボックスの先頭から最大6匹です。</p><div class="g9-roster">'+(items||"ポケモンをスカウトしてください。")+'</div><button class="g9-primary" data-g9="start" '+(!roster.length||busy?"disabled":"")+'>'+(busy?"準備中…":"全世代CPU対戦を開始")+'</button><p>CPUチーム生成・技や特性の効果判定・ダメージ計算は端末内で実行します。オンライン対戦のみ相手との同期にWebSocketを使用します。</p></section><section class="g9-card"><h2>対戦ルール</h2><div class="g9-spec"><span>図鑑</span><b>第1〜9世代（National Dex）</b></div><div class="g9-spec"><span>形式</span><b>シングル 6対6</b></div><div class="g9-spec"><span>ルール</span><b>Gen 9 National Dex AG</b></div><div class="g9-spec"><span>ギミック</span><b>メガシンカ・テラスタル</b></div><p>大会向けの使用制限を外した全国図鑑ルールです。ダイマックスも同じ試合に混ぜるにはShowdown本体の追加改造が必要です。</p></section></div><button class="g9-secondary" data-g9="diagnose" '+(diagnosticBusy?"disabled":"")+'>'+(diagnosticBusy?"診断中…":"不具合を診断する")+'</button>'+(diagnosticReport?'<pre class="g9-diagnostic">'+esc(diagnosticReport)+'</pre>':"")+renderOnlinePanel()+(errorText?'<div class="g9-error">'+esc(errorText)+'</div>':"")+'</section>';
+      return '<section class="g9"><header><div><small>LOCAL SHOWDOWN ENGINE · NATIONAL DEX</small><h1>全世代バトル</h1><p>第1〜9世代のデータを内蔵したShowdownエンジンがブラウザ内で動作します。CPU戦の対戦計算にサーバーAPIは使いません。</p></div><b class="g9-badge">GEN 1–9</b></header><div class="g9-columns"><section class="g9-card"><h2>自分のチーム</h2><p>編成画面で選んだチームを使います。未選択ならボックスの先頭から最大6匹です。</p><div class="g9-roster">'+(items||"ポケモンをスカウトしてください。")+'</div><button class="g9-primary" data-g9="start" '+(!roster.length||busy?"disabled":"")+'>'+(busy?"準備中…":"全世代CPU対戦を開始")+'</button><p>CPUチーム生成・技や特性の効果判定・ダメージ計算は端末内で実行します。オンライン対戦のみ相手との同期にWebSocketを使用します。</p></section><section class="g9-card"><h2>対戦ルール</h2><div class="g9-spec"><span>図鑑</span><b>第1〜9世代（National Dex）</b></div><div class="g9-spec"><span>形式</span><b>シングル 6対6</b></div><div class="g9-spec"><span>ルール</span><b>Gen 9 National Dex AG</b></div><div class="g9-spec"><span>ギミック</span><b>メガシンカ・テラスタル</b></div><p>大会向けの使用制限を外した全国図鑑ルールです。ダイマックスも同じ試合に混ぜるにはShowdown本体の追加改造が必要です。</p></section></div><button class="g9-secondary" data-g9="diagnose" '+(diagnosticBusy?"disabled":"")+'>'+(diagnosticBusy?"診断中…":"不具合を診断する")+'</button>'+(diagnosticReport?'<pre class="g9-diagnostic">'+esc(diagnosticReport)+'</pre>':"")+'<button class="g9-secondary" data-g9="standard-battle">通常バトル（独自エンジン）で遊ぶ</button><p class="g9-online-status">Showdownがこのブラウザで起動できない場合は、ホームの通常バトルへ切り替えられます。Showdown自体は削除されません。</p>'+renderOnlinePanel()+(errorText?'<div class="g9-error">'+esc(errorText)+'</div>':"")+'</section>';
     }
     const req=session.request||{},active=req.active?.[0]||{},list=req.side?.pokemon||[];
     const activeIndex=list.findIndex(x=>x.active),mon=activeIndex>=0?list[activeIndex]:null;
@@ -364,12 +413,14 @@
       team=selectedOwned();
       busy=true;
       repaint();
-      const result=await localEngineCall("start",{playerTeam,playerName:"プレイヤー"});
+      const result=await localEngineCall("start",{playerTeam,playerName:"プレイヤー"},45000);
       session={...result,logs:result.logs||[],kind:"cpu",playerName:"プレイヤー"};
       opponentName="CPU";
       gimmick="";
     }catch(error){
-      errorText=error?.message||String(error);
+      const message=error?.message||String(error);
+      if(shouldFallbackToStandardBattle(error)&&switchToStandardBattle("Showdownの起動に失敗したため、ホームの通常バトルへ切り替えました。全世代Showdown対戦は残っており、あとで再試行できます。"))return;
+      errorText=message;
       diagnosticReport="ローカルCPU対戦の開始に失敗しました。『不具合を診断する』でブラウザ内エンジンを確認できます。";
     }finally{
       busy=false;
@@ -468,6 +519,7 @@ document.head.appendChild(onlineCss);
     const kind=b.dataset.g9;
     if(kind==="gimmick"){const mode=b.dataset.mode||"";gimmick=gimmick===mode?"":mode;repaint();return;}
     if(kind==="diagnose"){void runDiagnostic();return;}
+    if(kind==="standard-battle"){event.preventDefault();event.stopImmediatePropagation();switchToStandardBattle("ホームの通常バトルへ移動しました。全世代Showdown対戦はそのまま残っています。");return;}
     event.preventDefault();event.stopImmediatePropagation();
     if(kind==="start"||(kind==="new"&&session?.kind!=="online"))void start();
     else if(kind==="new"&&session?.kind==="online")void leave();
@@ -506,6 +558,6 @@ document.head.appendChild(onlineCss);
       }
       console.info("[v31] Local Showdown item catalog loaded:",catalog.items.length);
     }).catch(error=>console.warn("[v31] Local Showdown catalog unavailable:",error));
-  W.PokemonChampions2DGen9={version:"31.0.0",format:"gen9nationaldexag",engine:"@pkmn/sim browser worker",cpu:"local",online:"server WebSocket",dex:"National Dex",mechanics:["Mega Evolution","Terastallization"],open,createOnlineRoom,joinOnlineRoom};
-console.info("[v31.0] Local National Dex simulator and online matchmaking loaded.");
+  W.PokemonChampions2DGen9={version:"33.0.0",format:"gen9nationaldexag",engine:"@pkmn/sim browser worker",cpu:"local",online:"server WebSocket",dex:"National Dex",mechanics:["Mega Evolution","Terastallization"],open,createOnlineRoom,joinOnlineRoom,switchToStandardBattle};
+console.info("[v33.0] Showdown remains enabled; worker startup has a built-in battle fallback.");
 })();
