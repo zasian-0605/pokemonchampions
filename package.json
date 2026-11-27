@@ -7,12 +7,17 @@
   "scripts": {
     "start": "node server/index.js",
     "test": "node server/test-gen9-engine.js",
-    "data:export": "node scripts/export-showdown-catalog.js"
+    "data:export": "node scripts/export-showdown-catalog.js",
+    "prestart": "node scripts/build-browser-gen9.js",
+    "build:browser-gen9": "node scripts/build-browser-gen9.js"
   },
   "engines": {
     "node": ">=22.18.0"
   },
   "dependencies": {
+    "@pkmn/sim": "0.11.0",
+    "@pkmn/randoms": "0.11.0",
+    "esbuild": "^0.25.0",
     "ws": "^8.18.0",
     "pokemon-showdown": "0.11.11"
   }
