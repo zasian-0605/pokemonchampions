@@ -122,10 +122,13 @@
    const form=v174MegaForm(item.meta);
    return `<section class="shop-card mega-stone-card"><div class="mega-shop-sprite">${speciesIcon(form,false,false)}<span class="pill">${item.meta.forme==='Mega-X'?'MEGA X':item.meta.forme==='Mega-Y'?'MEGA Y':item.meta.forme==='Mega-Z'?'MEGA Z':'MEGA'}</span></div><div><div class="section-kicker">MEGA ENERGY · ${item.meta.base.toUpperCase()}</div><h3>${esc(item.name)}</h3><p>${esc(item.description)}</p><small class="shop-stock">バッグ所持：${stock}個</small></div><div class="shop-price">${item.price} VP</div><button class="btn ${stock?'btn-secondary':'btn-primary'} shop-buy" data-action="buy-item" data-item="${esc(item.id)}" ${Number(state.vp||0)<Number(item.price||500)?'disabled':''}>${Number(state.vp||0)<Number(item.price||500)?'VP不足':'購入する'}</button></section>`;
   }).join('');
-  return `${pageHeader('MEGA ENERGY SHOP','メガエナジーショップ','ポケモンごとの専用メガエナジーをVPで購入します。購入後、トレーニング画面で対応するポケモンに装備してください。','<button class="btn btn-ghost" data-page="training">持ち物を装備</button>')}<div class="stats-strip">${statTile('VP',Number(state.vp||0).toLocaleString(),'所持ポイント')}${statTile('バッグ所持数',total,'購入済み・未装備の専用エナジー')}${statTile('対応フォーム',MEGA_STONES.length,'購入可能な専用エナジー')}</div><div class="search-row"><input id="shop-search" class="field search-field" placeholder="ポケモン名・エナジー名で検索" value="${esc(state.shopSearch||'')}"><span class="pill">${list.length}種類</span></div><div class="shop-grid mega-shop-grid">${cards||'<p class="empty-state">該当するエナジーがありません。</p>'}</div>`;
+  return `${pageHeader('MEGA ENERGY SHOP','メガエナジーショップ','ポケモンごとの専用メガエナジーをVPで購入します。購入後、トレーニング画面で対応するポケモンに装備してください。','<button class="btn btn-ghost" data-page="training">持ち物を装備</button>')}<div class="stats-strip">${statTile('VP',Number(state.vp||0).toLocaleString(),'所持ポイント')}${statTile('バッグ所持数',total,'購入済み・未装備の専用エナジー')}${statTile('対応フォーム',MEGA_STONES.length,'購入可能な専用エナジー')}</div><div class="search-row"><input id="shop-search" class="field search-field" placeholder="ポケモン名・エナジー名で検索" value="${esc(state.shopSearch||'')}"><button type="button" class="btn btn-ghost" data-action="clear-mega-shop-search">検索解除</button><span class="pill">${list.length}種類</span></div><div class="shop-grid mega-shop-grid">${cards||'<p class="empty-state">該当するエナジーがありません。</p>'}</div>`;
  };
 
  handleAction=async function(action,el){
+  if(action==='clear-mega-shop-search'){
+   state.shopSearch='';renderPage();return;
+  }
   if(action==='buy-item'){
    const item=MEGA_STONES.find(x=>itemSlug(x.id)===itemSlug(el?.dataset?.item));
    if(!item){toast('専用メガエナジーが見つかりません。','bad');return;}
