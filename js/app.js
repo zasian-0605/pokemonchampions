@@ -5202,7 +5202,7 @@ function v174RunMegaTeraTests(){
  test('全フォームが内蔵図鑑の種族を参照',()=>V174_MEGA_FORM_DATA.every(x=>!!state.data?.dexById?.[slug(x.base)]));
  test('Z・X・Y形態のストーン判定',()=>['charizarditex','mewtwonitey','garchompitez','absolitez','lucarionitez'].every(id=>!!V174_MEGA_BY_STONE[id]));
  test('19種類のテラスタイプ',()=>V174_TERA_TYPES.length===19&&V174_TERA_TYPES.includes('Stellar'));
- test('メガエナジーは独立してCARE_ITEMSに存在',()=>CARE_ITEMS.some(x=>x.id==='megaenergy'));
+ test('旧グローバルメガエナジーは購入対象外、専用メガストーン一覧は維持',()=>!CARE_ITEMS.some(x=>x.id==='megaenergy')&&MEGA_STONES.length===V174_MEGA_FORM_DATA.length);
  test('テラスタルの結晶シェルを再描画HTMLへ保持',()=>v175DecorateTeraBattleHtml('<div class=\"battle-mon player slot-0\" id=\"mon-player-0\"></div>',{playerTeam:[{terastallized:true,teraType:'Water'}],playerActive:[0],enemyTeam:[],enemyActive:[]}).includes('tera-crystal-shell'));
  return {passed:checks.filter(x=>x.passed).length,total:checks.length,checks};
 }
