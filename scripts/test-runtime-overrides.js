@@ -27,7 +27,7 @@ const turnStart = app.indexOf('async function executeTurn(actions){');
 const turnEnd = app.indexOf('\nfunction findMegaForm', turnStart);
 assert.ok(turnStart >= 0 && turnEnd > turnStart, 'base executeTurn must exist');
 const baseTurn = app.slice(turnStart, turnEnd);
-assert.equal((baseTurn.match(/processEndTurn\\(b\\)/g) || []).length, 1,
+assert.equal((baseTurn.match(/processEndTurn\(b\)/g) || []).length, 1,
   'base executeTurn must call processEndTurn exactly once');
 
 // The v16.10 timer wrapper must delegate to its predecessor once and own the countdown.
@@ -35,11 +35,11 @@ const wrapperStart = app.indexOf('const __v170ProcessEndTurn=processEndTurn;');
 const wrapperEnd = app.indexOf('// Mutable battle types now participate', wrapperStart);
 assert.ok(wrapperStart >= 0 && wrapperEnd > wrapperStart, 'base end-turn timer wrapper must exist');
 const timerWrapper = app.slice(wrapperStart, wrapperEnd);
-assert.equal((timerWrapper.match(/__v170ProcessEndTurn\\(b\\)/g) || []).length, 1,
+assert.equal((timerWrapper.match(/__v170ProcessEndTurn\(b\)/g) || []).length, 1,
   'v16.10 end-turn wrapper must call its predecessor exactly once');
-assert.equal((timerWrapper.match(/v170AdvanceFieldTimers\\(b\\)/g) || []).length, 1,
+assert.equal((timerWrapper.match(/v170AdvanceFieldTimers\(b\)/g) || []).length, 1,
   'all timed field effects must advance in one place');
-assert.ok(!/b\\.trickRoomTurns\\s*--/.test(app),
+assert.ok(!/b\.trickRoomTurns\s*--/.test(app),
   'Trick Room must not have a second inline decrement path');
 
 // The legacy metadata bridge must not toggle a canonical pseudo-weather move a second time.
@@ -59,7 +59,7 @@ assert.equal((v178.match(/renderShop=function/g) || []).length, 1, 'v17.8 must o
 assert.equal((v178.match(/handleAction=async function/g) || []).length, 1, 'v17.8 must own one Mega action handler');
 assert.ok(v178.includes('data-action="clear-mega-shop-search"'), 'shop search reset must be in the owning renderer');
 assert.ok(v178.includes("if(action==='clear-mega-shop-search')"), 'shop search reset must be handled by the owning action handler');
-assert.ok(!/renderShop\\s*=\\s*function|handleAction\\s*=\\s*async\\s*function/.test(v180),
+assert.ok(!/renderShop\s*=\s*function|handleAction\s*=\s*async\s*function/.test(v180),
   'v18.0 must not add a second Mega shop or purchase override');
 assert.ok(v180.includes('auditMegaShop'), 'v18.0 shop diagnostics must remain available');
 
