@@ -507,7 +507,16 @@ function auditBattleMechanics() {
     ["swordofruin", ["onAnyModifyDef"]],
     ["beadsofruin", ["onAnyModifySpD"]],
     ["electromorphosis", ["onDamagingHit"]],
-    ["myceliummight", ["onFractionalPriority", "onModifyMove"]]
+    ["myceliummight", ["onFractionalPriority", "onModifyMove"]],
+    ["goodasgold", ["onTryHit"]],
+    ["hospitality", ["onStart"]],
+    ["supersweetsyrup", ["onStart"]],
+    ["eartheater", ["onTryHit"]],
+    ["thermalexchange", ["onDamagingHit", "onSetStatus"]],
+    ["angershell", ["onAfterMoveSecondary"]],
+    ["rockypayload", ["onModifyAtk", "onModifySpA"]],
+    ["toxicchain", ["onSourceDamagingHit"]],
+    ["teraformzero", ["onAfterTerastallization"]]
   ];
   const svAbilityHooks = abilityRequirements.map(([id, hooks]) => {
     const ability = Dex.abilities.get(id);
