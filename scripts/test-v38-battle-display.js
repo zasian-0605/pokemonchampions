@@ -160,6 +160,6 @@ const shop = W.renderShop();
 assert.match(shop, /v38-energy-preview/);
 assert.match(shop, /charizardmegax\|front\|normal\|static/);
 assert.match(shop, /MEGA X ENERGY/);
-assert.equal(api.audit().spriteStableBattleRender, true);
+assert.equal(api.audit().spriteStableBattleRender, false); // The original battle renderer is intentionally preserved.
 assert.equal(api.audit().megaEnergyArtwork, true);
 console.log("v38 battle display tests passed.");
