@@ -13,7 +13,7 @@ assert.match(html, /v39-team-preview-switch-cinematics\.js/, 'v39 team preview a
 assert.match(gen9Ui, /data-g9="team-ready"/, 'Showdown UI must let the player confirm their lineup');
 assert.match(gen9Ui, /Date\.now\(\)\+120000/, 'Showdown team preview must use a two-minute countdown');
 assert.match(gen9Ui, /animateSwitchOut\("player"\)/, 'Showdown manual switches must animate the outgoing Pokémon');
-assert.match(worker, /deferPlayerTeamPreview:true/, 'CPU worker must wait for player team selection');
+assert.match(worker, /makePreviewRequest\(playerTeam,"p1"\)/, 'CPU worker must show the player a prebattle team preview');
 assert.match(worker, /action\?\.teamOrder/, 'CPU worker must validate the submitted team order');
 assert.match(app, /PokemonChampions2DSwitchCinematics\?\.beforeSwitch/, 'standard battle must animate switch recalls');
 assert.match(app, /afterEndTurn\?\.\(b,v39ActiveBefore\)/, 'standard battle must animate automatic enemy replacements');
