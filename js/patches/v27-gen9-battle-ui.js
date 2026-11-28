@@ -6,6 +6,7 @@
   const GEN9_WORKER_URL=new URL("../gen9-local-engine.worker.js?v=33.0.0",PATCH_SCRIPT_URL).href;
   const statusJa={brn:"やけど",par:"まひ",slp:"ねむり",frz:"こおり",psn:"どく",tox:"もうどく"};
   let session=null, team=[], busy=false, errorText="", gimmick="", onlineSocket=null, onlineRoomCode="", onlineStatus="", waitingForOpponent=false, opponentName="CPU", diagnosticBusy=false, diagnosticReport="", randomSearching=false, onlineMode="private";
+  let previewOrder=[], previewEndsAt=0, previewInterval=null;
   const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const idOf=v=>String(v||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
   let localWorker=null, localWorkerSequence=0;
@@ -214,7 +215,7 @@
     return (request?.side?.pokemon||[]).map((p,i)=>{
       const h=hpOf(p.condition),blocked=p.active||/fnt/i.test(p.condition||"");
       const title=team[i]?.name||nameOf(p.ident);
-      return '<button class="g9-switch" data-g9="switch" data-index="'+i+'" '+(blocked||busy||waitingForOpponent?"disabled":"")+'><b>'+esc(title)+'</b><span>'+esc(h.text)+'</span><i><em style="width:'+h.pct+'%"></em></i><small>'+(p.active?"場に出ている":blocked?"ひんし":"交代する")+'</small></button>';
+      return '<button class="g9-switch" data-g9="switch" data-index="'+i+'" '+(blocked||busy||waitingForOpponent?"disabled":"")+'><span class="g9-switch-art">'+previewArt(p,"player",i)+'</span><b>'+esc(title)+'</b><span>'+esc(h.text)+'</span><i><em style="width:'+h.pct+'%"></em></i><small>'+(p.active?"場に出ている":blocked?"ひんし":"交代する")+'</small></button>';
     }).join("");
   }
   function renderOnlinePanel(){
@@ -288,14 +289,118 @@
       repaint();
     }
   }
+
+  function stopPreviewClock(){
+    if(previewInterval){clearInterval(previewInterval);previewInterval=null;}
+    previewEndsAt=0;
+  }
+  function startPreviewClock(){
+    stopPreviewClock();
+    previewEndsAt=Date.now()+120000;
+    previewInterval=setInterval(()=>{
+      if(!session?.request?.teamPreview){stopPreviewClock();return;}
+      if(Date.now()>=previewEndsAt){
+        const order=previewOrder.slice();
+        stopPreviewClock();
+        void act({teamOrder:order});
+      }else repaint();
+    },1000);
+  }
+  function findRequestSpecies(entry){
+    const label=String(entry?.details||entry?.ident||"ポケモン").split(",")[0].split(":").pop().trim();
+    const key=idOf(label);
+    const app=APP();
+    return app?.findSpecies?.(key)||app?.state?.data?.dexById?.[key]||{id:key,name:label,jpName:label,displayName:label};
+  }
+  function previewArt(entry,side,index){
+    const member=side==="player"?(team[index]||null):findRequestSpecies(entry);
+    return APP()?.speciesIcon?.(member||findRequestSpecies(entry),side==="player",true)||'<span class="g9-no-sprite">?</span>';
+  }
+  function renderPreviewCard(entry,side,index,position){
+    const member=side==="player"?(team[index]||null):findRequestSpecies(entry);
+    const title=member?.name||nameOf(entry?.ident||entry?.details);
+    const controls=side==="player"
+      ? '<span class="g9-order-controls"><button data-g9="team-up" data-index="'+position+'" '+(position===0?"disabled":"")+' aria-label="上へ">↑</button><button data-g9="team-down" data-index="'+position+'" '+(position===previewOrder.length-1?"disabled":"")+' aria-label="下へ">↓</button></span>'
+      : '<span class="g9-order-fixed">CPU READY</span>';
+    const level=member?.level||String(entry?.details||"").match(/L(\d+)/)?.[1]||"50";
+    return '<article class="g9-preview-mon '+side+'"><span class="g9-preview-number">'+(position+1)+'</span><div class="g9-preview-art">'+previewArt(entry,side,index)+'</div><b>'+esc(title)+'</b><small>Lv.'+esc(level)+'</small>'+controls+'</article>';
+  }
+  function renderTeamPreview(req){
+    const own=req.side?.pokemon||[];
+    const foe=session?.opponentRequest?.side?.pokemon||[];
+    if(previewOrder.length!==own.length)previewOrder=own.map((_,i)=>i);
+    const seconds=Math.max(0,Math.ceil((previewEndsAt-Date.now())/1000));
+    const clock=String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");
+    const ownCards=previewOrder.map((originalIndex,position)=>renderPreviewCard(own[originalIndex],"player",originalIndex,position)).join("");
+    const foeCards=foe.map((entry,i)=>renderPreviewCard(entry,"enemy",i,i)).join("");
+    return '<section class="g9 g9-preview"><header><div><small>NATIONAL DEX · TEAM PREVIEW</small><h1>対戦前の見せ合い</h1><p>お互いのチームを確認して、こちらの先発と控えの順番を決めよう。</p></div><b class="g9-badge">120 SEC</b></header><div class="g9-preview-clock"><span>対戦開始まで</span><strong>'+clock+'</strong><small>CPU：準備OK</small></div><div class="g9-preview-columns"><section class="g9-card"><div class="g9-preview-heading"><h2>YOUR TEAM</h2><b>'+own.length+'体</b></div><p>↑ ↓ で順番を変更。いちばん上が先発ポケモン。</p><div class="g9-preview-team">'+ownCards+'</div><button class="g9-primary" data-g9="team-ready" '+(busy?"disabled":"")+'>'+(busy?"選出を確定中…":"準備OK！ 対戦開始")+'</button></section><section class="g9-card"><div class="g9-preview-heading"><h2>OPPONENT TEAM</h2><b>'+foe.length+'体</b></div><p>CPUは先に準備OK。相手の技・持ち物は対戦開始まで非公開。</p><div class="g9-preview-team">'+foeCards+'</div><div class="g9-preview-ready">✓ CPU 準備OK</div></section></div><p class="g9-preview-note">120秒で自動確定します。準備OKを押すと、その時点の順番で対戦が始まります。</p></section>';
+  }
+  function activeIndex(request){
+    return (request?.side?.pokemon||[]).findIndex(mon=>!!mon.active);
+  }
+  async function animateSwitchOut(side){
+    const source=document.querySelector(".g9-active-sprite."+side+" img");
+    if(!source)return;
+    const rect=source.getBoundingClientRect();
+    const clone=source.cloneNode(true);
+    clone.style.cssText="position:fixed;z-index:100000;pointer-events:none;margin:0;left:"+rect.left+"px;top:"+rect.top+"px;width:"+rect.width+"px;height:"+rect.height+"px;object-fit:contain;";
+    document.body.appendChild(clone);
+    const reduce=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    const dx=side==="player"?-Math.max(100,window.innerWidth*.32):Math.max(100,window.innerWidth*.32);
+    const dy=side==="player"?Math.max(70,window.innerHeight*.16):-Math.max(70,window.innerHeight*.16);
+    try{
+      if(!reduce&&clone.animate)await clone.animate([
+        {transform:"translate(0,0) scale(1) rotate(0)",filter:"hue-rotate(0deg) saturate(1)",clipPath:"inset(0% round 8%)",opacity:1},
+        {offset:.45,transform:"translate(0,0) scale(.62,.8) rotate(180deg)",filter:"hue-rotate(190deg) saturate(2.5)",clipPath:"inset(0% round 50%)",opacity:1},
+        {transform:"translate("+dx+"px,"+dy+"px) scale(.08) rotate(620deg)",filter:"hue-rotate(360deg) saturate(2.8) brightness(1.4)",clipPath:"inset(0% round 50%)",opacity:0}
+      ],{duration:680,easing:"cubic-bezier(.18,.72,.18,1)",fill:"forwards"}).finished.catch(()=>{});
+      else await new Promise(resolve=>setTimeout(resolve,80));
+    }finally{clone.remove();}
+  }
+  async function animateSwitchIn(side){
+    const target=document.querySelector(".g9-active-sprite."+side+" img");
+    if(!target)return;
+    const rect=target.getBoundingClientRect();
+    const ball=document.createElement("div");
+    ball.className="g9-switch-ball "+side;
+    const startX=side==="player"?-34:window.innerWidth+34;
+    const startY=side==="player"?window.innerHeight-48:24;
+    ball.style.left=startX+"px";
+    ball.style.top=startY+"px";
+    document.body.appendChild(ball);
+    const endX=rect.left+rect.width/2,endY=rect.top+rect.height/2;
+    const dx=endX-startX,dy=endY-startY;
+    const priorOpacity=target.style.opacity;
+    target.style.opacity="0";
+    try{
+      if(ball.animate&&!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches){
+        await ball.animate([{transform:"translate(0,0) rotate(0) scale(.55)"},{transform:"translate("+dx+"px,"+dy+"px) rotate(620deg) scale(1)"}],{duration:620,easing:"cubic-bezier(.15,.75,.2,1)",fill:"forwards"}).finished.catch(()=>{});
+        await ball.animate([{transform:"translate("+dx+"px,"+dy+"px) scale(1)",opacity:1},{transform:"translate("+dx+"px,"+dy+"px) scale(1.65)",opacity:0}],{duration:220,fill:"forwards"}).finished.catch(()=>{});
+      }else await new Promise(resolve=>setTimeout(resolve,80));
+    }finally{
+      ball.remove();
+      target.style.opacity=priorOpacity||"1";
+      target.animate?.([{opacity:0,transform:"scale(.65)"},{opacity:1,transform:"scale(1)"}],{duration:260,easing:"cubic-bezier(.2,.8,.2,1)"});
+    }
+  }
+  function renderActiveSprite(entry,side,index){
+    if(!entry)return "";
+    return '<div class="g9-active-sprite '+side+'">'+previewArt(entry,side,index)+'</div>';
+  }
+
   function render(){
     if(!session){
       const roster=buildTeam();
       const items=roster.map((m,i)=>'<div class="g9-team"><span>'+(i+1)+'</span><b>'+esc(m.name||m.species)+'</b><small>Lv.'+m.level+' · '+m.moves.length+'技</small></div>').join("");
       return '<section class="g9"><header><div><small>LOCAL SHOWDOWN ENGINE · NATIONAL DEX</small><h1>全世代バトル</h1><p>第1〜9世代のデータを内蔵したShowdownエンジンがブラウザ内で動作します。CPU戦の対戦計算にサーバーAPIは使いません。</p></div><b class="g9-badge">GEN 1–9</b></header><div class="g9-columns"><section class="g9-card"><h2>自分のチーム</h2><p>編成画面で選んだチームを使います。未選択ならボックスの先頭から最大6匹です。</p><div class="g9-roster">'+(items||"ポケモンをスカウトしてください。")+'</div><button class="g9-primary" data-g9="start" '+(!roster.length||busy?"disabled":"")+'>'+(busy?"準備中…":"全世代CPU対戦を開始")+'</button><p>CPUチーム生成・技や特性の効果判定・ダメージ計算は端末内で実行します。オンライン対戦のみ相手との同期にWebSocketを使用します。</p></section><section class="g9-card"><h2>対戦ルール</h2><div class="g9-spec"><span>図鑑</span><b>第1〜9世代（National Dex）</b></div><div class="g9-spec"><span>形式</span><b>シングル 6対6</b></div><div class="g9-spec"><span>ルール</span><b>Gen 9 National Dex AG</b></div><div class="g9-spec"><span>ギミック</span><b>メガシンカ・テラスタル</b></div><p>大会向けの使用制限を外した全国図鑑ルールです。ダイマックスも同じ試合に混ぜるにはShowdown本体の追加改造が必要です。</p></section></div><button class="g9-secondary" data-g9="diagnose" '+(diagnosticBusy?"disabled":"")+'>'+(diagnosticBusy?"診断中…":"不具合を診断する")+'</button>'+(diagnosticReport?'<pre class="g9-diagnostic">'+esc(diagnosticReport)+'</pre>':"")+'<button class="g9-secondary" data-g9="standard-battle">別ルールの独自バトルへ切り替える</button><p class="g9-online-status">通常はオフラインShowdownエンジンを使います。独自バトルへの切り替えは、このボタンを押した場合だけ行います。</p>'+renderOnlinePanel()+(errorText?'<div class="g9-error">'+esc(errorText)+'</div>':"")+'</section>';
     }
-    const req=session.request||{},active=req.active?.[0]||{},list=req.side?.pokemon||[];
-    const activeIndex=list.findIndex(x=>x.active),mon=activeIndex>=0?list[activeIndex]:null;
+    const req=session.request||{};
+    if(req.teamPreview)return renderTeamPreview(req);
+    const active=req.active?.[0]||{},list=req.side?.pokemon||[];
+    const currentActiveIndex=list.findIndex(x=>x.active),mon=currentActiveIndex>=0?list[currentActiveIndex]:null;
+    const opponentList=session.opponentRequest?.side?.pokemon||[];
+    const opponentActiveIndex=activeIndex(session.opponentRequest);
+    const opponentActive=opponentActiveIndex>=0?opponentList[opponentActiveIndex]:null;
     const monName=mon?(team[activeIndex]?.name||nameOf(mon.ident)):"交代を選択";
     const hp=hpOf(mon?.condition),forced=Array.isArray(req.forceSwitch)&&req.forceSwitch.some(Boolean);
     const moves=(active.moves||[]).map((m,i)=>{
@@ -317,7 +422,7 @@
     else if(session.winner===session.playerName||session.winner==="プレイヤー"||session.winner==="Player 1")result="勝利！";
     else result="敗北…";
     const done=session.done;
-    return '<section class="g9"><header><div><small>NATIONAL DEX · TURN '+(session.turn||"")+'</small><h1>全世代バトル</h1><p>'+(done?"対戦終了":(waitingForOpponent?"相手の行動待ち":"Showdownエンジンが行動を判定中"))+'</p></div><b class="g9-badge">'+(done?"RESULT":"BATTLE")+'</b></header><div class="g9-columns"><section class="g9-card g9-arena"><div><small>PLAYER</small><h2>'+esc(monName)+'</h2><div class="g9-hp"><i style="width:'+hp.pct+'%"></i></div><p>'+esc(hp.text)+(mon?.status?" · "+esc(statusJa[mon.status]||mon.status):"")+'</p></div><div class="g9-versus">⚔</div><div class="g9-opponent"><small>OPPONENT</small><b>'+esc(opponentName)+'</b><p>Showdownバトル</p></div></section><section class="g9-card g9-controls">'+(done?'<div class="g9-result"><h2>'+result+'</h2><button class="g9-primary" data-g9="new">もう一度対戦</button><button class="g9-secondary" data-g9="leave">終了して戻る</button></div>':'<div><h2>'+(forced?"交代してください":esc(monName)+" の行動")+'</h2><p>'+(forced?"ひんしになったため、交代が必要です。":"技を選択してください。")+'</p>'+(forced?"":'<div class="g9-moves">'+(moves||"使用できる技がありません。")+'</div>')+gimmickPanel+'</div><div class="g9-switch-area"><b>交代</b><div class="g9-switches">'+renderSwitches(req)+'</div></div>'+(busy?'<p class="g9-busy">Showdownがターンを処理中…</p>':"")+'<button class="g9-secondary" data-g9="forfeit" '+(busy?"disabled":"")+' >降参する</button><button class="g9-secondary" data-g9="leave" '+(busy?"disabled":"")+' >対戦を終了</button>')+'</section></div><section class="g9-card g9-logs"><h2>バトルログ</h2><div>'+(logs||"<p>バトルログを待っています…</p>")+'</div></section>'+(errorText?'<div class="g9-error">'+esc(errorText)+'</div>':"")+'</section>';
+    return '<section class="g9"><header><div><small>NATIONAL DEX · TURN '+(session.turn||"")+'</small><h1>全世代バトル</h1><p>'+(done?"対戦終了":(waitingForOpponent?"相手の行動待ち":"Showdownエンジンが行動を判定中"))+'</p></div><b class="g9-badge">'+(done?"RESULT":"BATTLE")+'</b></header><div class="g9-columns"><section class="g9-card g9-arena"><div class="g9-arena-side player"><small>PLAYER</small>'+renderActiveSprite(list[currentActiveIndex],"player",currentActiveIndex)+'<h2>'+esc(monName)+'</h2><div class="g9-hp"><i style="width:'+hp.pct+'%"></i></div><p>'+esc(hp.text)+(mon?.status?" · "+esc(statusJa[mon.status]||mon.status):"")+'</p></div><div class="g9-versus">⚔</div><div class="g9-arena-side enemy"><small>OPPONENT</small>'+renderActiveSprite(opponentActive,"enemy",opponentActiveIndex)+'<b>'+esc(opponentActive?nameOf(opponentActive.ident||opponentActive.details):opponentName)+'</b><p>Showdownバトル</p></div></section><section class="g9-card g9-controls">'+(done?'<div class="g9-result"><h2>'+result+'</h2><button class="g9-primary" data-g9="new">もう一度対戦</button><button class="g9-secondary" data-g9="leave">終了して戻る</button></div>':'<div><h2>'+(forced?"交代してください":esc(monName)+" の行動")+'</h2><p>'+(forced?"ひんしになったため、交代が必要です。":"技を選択してください。")+'</p>'+(forced?"":'<div class="g9-moves">'+(moves||"使用できる技がありません。")+'</div>')+gimmickPanel+'</div><div class="g9-switch-area"><b>交代</b><div class="g9-switches">'+renderSwitches(req)+'</div></div>'+(busy?'<p class="g9-busy">Showdownがターンを処理中…</p>':"")+'<button class="g9-secondary" data-g9="forfeit" '+(busy?"disabled":"")+' >降参する</button><button class="g9-secondary" data-g9="leave" '+(busy?"disabled":"")+' >対戦を終了</button>')+'</section></div><section class="g9-card g9-logs"><h2>バトルログ</h2><div>'+(logs||"<p>バトルログを待っています…</p>")+'</div></section>'+(errorText?'<div class="g9-error">'+esc(errorText)+'</div>':"")+'</section>';
   }
   function repaint(){const main=document.getElementById("main");if(main&&S()?.page==="gen9-battle")main.innerHTML=render();}
   function connectOnline(){
@@ -451,6 +556,7 @@
     }catch(e){errorText=e.message||String(e);busy=false;repaint();}
   }
   async function start(){
+    stopPreviewClock();
     errorText="";
     try{
       const playerTeam=buildTeam();
@@ -463,6 +569,10 @@
       session={...result,logs:result.logs||[],kind:"cpu",playerName:"プレイヤー"};
       opponentName="CPU";
       gimmick="";
+      if(session.request?.teamPreview){
+        previewOrder=(session.request.side?.pokemon||[]).map((_,index)=>index);
+        startPreviewClock();
+      }
     }catch(error){
       const message=error?.message||String(error);
       if(shouldFallbackToStandardBattle(error)){
@@ -479,9 +589,15 @@
   }
   async function act(action){
     if(!session||busy||waitingForOpponent||session.done)return;
+    const isTeamChoice=Array.isArray(action?.teamOrder);
+    const previousPlayer=activeIndex(session.request);
+    const previousEnemy=activeIndex(session.opponentRequest);
+    const ownSwitch=action?.switchTo!=null;
+    if(isTeamChoice)stopPreviewClock();
     busy=true;
     errorText="";
     repaint();
+    if(session.kind!=="online"&&ownSwitch)await animateSwitchOut("player");
     if(session.kind==="online"){
       try{
         if(!onlineSocket||onlineSocket.readyState!==WebSocket.OPEN)throw new Error("オンライン接続が切れています。");
@@ -496,8 +612,17 @@
     }
     try{
       const result=await localEngineCall("action",{action,cursor:session.logCursor||0});
-      session={...session,...result,kind:"cpu",logs:[...(session.logs||[]),...(result.logs||[])]};
+      const nextPlayer=activeIndex(result.request);
+      const nextEnemy=activeIndex(result.opponentRequest);
+      const playerChanged=previousPlayer>=0&&nextPlayer>=0&&previousPlayer!==nextPlayer;
+      const enemyChanged=previousEnemy>=0&&nextEnemy>=0&&previousEnemy!==nextEnemy;
+      if(session.kind!=="online"&&!ownSwitch&&enemyChanged)await animateSwitchOut("enemy");
+      if(isTeamChoice)team=(action.teamOrder||[]).map(index=>team[index]).filter(Boolean);
+      session={...session,...result,kind:session.kind||"cpu",logs:[...(session.logs||[]),...(result.logs||[])]};
       gimmick="";
+      repaint();
+      if(session.kind!=="online"&&playerChanged)await animateSwitchIn("player");
+      if(session.kind!=="online"&&enemyChanged)await animateSwitchIn("enemy");
     }catch(error){
       errorText=error?.message||String(error);
     }finally{
@@ -506,6 +631,7 @@
     }
   }
   async function leave(){
+    stopPreviewClock();
     if(onlineSocket){
       if(onlineSocket.readyState===WebSocket.OPEN){
         try{onlineSocket.send(JSON.stringify({type:"leave-gen9-room"}));}catch(_){}
@@ -555,6 +681,7 @@
   const css=document.createElement("style");
   css.textContent=".g9{max-width:1160px;margin:auto;padding:clamp(12px,2vw,24px);color:#eef2ff}.g9 header{display:flex;justify-content:space-between;gap:15px;margin-bottom:18px}.g9 header small{font-size:10px;letter-spacing:.15em;color:#a4b3dc;font-weight:900}.g9 h1{font-size:clamp(25px,4vw,34px);margin:7px 0}.g9 header p,.g9-card>p,.g9-card p{font-size:11px;color:#acb9d8;line-height:1.65}.g9-badge{height:max-content;border:1px solid #899ef066;background:#6c80d322;padding:8px 12px;border-radius:30px;font-size:11px}.g9-columns{display:grid;grid-template-columns:1fr 1fr;gap:13px}.g9-card{border:1px solid #8294d13d;border-radius:15px;padding:16px;background:linear-gradient(145deg,#202a4a,#141b32);min-width:0}.g9-card h2{font-size:15px;margin:0 0 9px}.g9-roster{display:grid;gap:7px;margin:14px 0}.g9-team{display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:8px;background:#ffffff0b;border-radius:8px;padding:9px;font-size:12px}.g9-team span,.g9-team small{color:#aab8d7;font-size:10px}.g9-primary,.g9-secondary{border:0;border-radius:10px;padding:11px 13px;font-weight:900;cursor:pointer}.g9-primary{background:linear-gradient(110deg,#5e75e8,#899bff);color:white;width:100%;margin:8px 0}.g9-secondary{background:#303c61;color:#e7edff;border:1px solid #8596d94a;margin-top:10px}.g9 button:disabled{opacity:.42;cursor:not-allowed}.g9-spec{display:flex;justify-content:space-between;gap:8px;padding:12px 0;border-bottom:1px solid #ffffff12;font-size:12px}.g9-spec span{color:#aab8d7}.g9-arena{min-height:300px;display:flex;flex-direction:column;justify-content:space-between;background:radial-gradient(ellipse at 50% 45%,#355174,#17213e 70%)}.g9-arena small,.g9-opponent small{font-size:9px;letter-spacing:.16em;color:#afc0e9}.g9-arena h2{font-size:18px;margin:6px 0}.g9-hp{height:9px;background:#ffffff22;border-radius:20px;overflow:hidden;max-width:320px}.g9-hp i{display:block;height:100%;background:linear-gradient(90deg,#54dba2,#d7df7d)}.g9-arena p,.g9-opponent p{font-size:11px;color:#cad6f1}.g9-versus{text-align:center;font-size:56px;color:#b5cdf477}.g9-opponent{display:flex;flex-direction:column;align-items:flex-end;gap:5px}.g9-opponent b{font-size:17px}.g9-controls>div:first-child>p{color:#aeb9d6;font-size:11px}.g9-moves{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.g9-move{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:65px;text-align:left;padding:10px;border:1px solid #8498df55;border-radius:9px;background:#293555;color:#f2f5ff;cursor:pointer}.g9-move span{display:flex;flex-direction:column;gap:5px}.g9-move b{font-size:12px}.g9-move small,.g9-move strong{font-size:10px;color:#b7c5e8}.g9-tera{display:flex;gap:7px;align-items:center;font-size:11px;margin:10px 0}.g9-switch-area{margin-top:16px}.g9-switch-area>b{font-size:12px}.g9-switches{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:8px}.g9-switch{display:flex;flex-direction:column;gap:5px;text-align:left;min-width:0;background:#171f3b;border:1px solid #8092d044;border-radius:9px;padding:8px;color:#f0f3ff}.g9-switch b{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.g9-switch span,.g9-switch small{font-size:9px;color:#abb8d5}.g9-switch i{height:5px;border-radius:9px;background:#ffffff22;overflow:hidden}.g9-switch em{display:block;height:100%;background:#62d2a1}.g9-busy{color:#d1ddff!important}.g9-logs{margin-top:13px}.g9-logs>div{max-height:245px;overflow:auto;display:flex;flex-direction:column;gap:4px}.g9-logs p{margin:0;background:#ffffff09;border-radius:7px;padding:7px;font-size:11px;color:#dce5ff}.g9-result{text-align:center;padding:25px 5px}.g9-result h2{font-size:30px}.g9-error{margin-top:12px;padding:12px;border-radius:10px;background:#8e39411c;border:1px solid #e88b9b66;color:#ffdbe3;font-size:12px;white-space:pre-wrap}@media(max-width:760px){.g9-columns{grid-template-columns:1fr}.g9-switches{grid-template-columns:repeat(2,minmax(0,1fr))}.g9-arena{min-height:240px}}";
   css.textContent += ".g9-diagnostic{white-space:pre-wrap;overflow-wrap:anywhere;margin:10px 0;padding:12px;border-radius:9px;background:#0c1428;color:#e4edff;border:1px solid #8294d155;font-size:11px;line-height:1.8}";
+  css.textContent += ".g9-preview-clock{display:flex;align-items:center;justify-content:center;gap:14px;margin:12px 0;padding:13px;border:1px solid #91a8f066;border-radius:14px;background:linear-gradient(110deg,#26395b,#171f3c)}.g9-preview-clock>span{font-size:12px;color:#c4d1ee}.g9-preview-clock>strong{font-size:30px;letter-spacing:.08em;color:#fff;font-variant-numeric:tabular-nums}.g9-preview-clock>small{color:#83e9b8;font-weight:900}.g9-preview-columns{display:grid;grid-template-columns:1fr 1fr;gap:13px}.g9-preview-heading{display:flex;justify-content:space-between;align-items:center}.g9-preview-heading h2{margin:0}.g9-preview-heading b{font-size:11px;color:#bfcaf0}.g9-preview-team{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.g9-preview-mon{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:0;padding:9px 5px;border:1px solid #8fa5e344;border-radius:10px;background:#0e1830;text-align:center}.g9-preview-mon b{font-size:11px;overflow-wrap:anywhere}.g9-preview-mon small{font-size:10px;color:#b4c3e4}.g9-preview-number{position:absolute;left:6px;top:5px;font-size:10px;color:#8fa7ff;font-weight:900}.g9-preview-art{width:100%;height:82px;display:flex;align-items:center;justify-content:center}.g9-preview-art img{max-width:100%;max-height:82px;object-fit:contain}.g9-order-controls{display:flex;gap:7px}.g9-order-controls button{width:27px;height:25px;border:1px solid #7e93d866;border-radius:7px;background:#34466f;color:#fff;font-weight:900}.g9-order-controls button:disabled{opacity:.25}.g9-order-fixed{font-size:8px;color:#79e7b3;font-weight:900}.g9-preview-ready{padding:12px;border-radius:9px;background:#174c3a66;color:#8df2bd;font-weight:900;text-align:center}.g9-preview-note{font-size:11px;text-align:center;color:#adbce0}.g9-active-sprite{height:112px;display:flex;align-items:center;justify-content:center;margin:8px 0}.g9-active-sprite img{max-height:112px;max-width:min(190px,100%);object-fit:contain;transition:opacity .15s}.g9-arena-side{display:flex;flex-direction:column;min-width:0}.g9-arena-side.enemy{align-items:flex-end}.g9-arena-side.player{align-items:flex-start}.g9-switch-art{height:38px;display:flex;align-items:center;justify-content:center}.g9-switch-art img{max-width:42px;max-height:38px;object-fit:contain}.g9-switch-ball{position:fixed;z-index:100001;width:32px;height:32px;border:2px solid #26324d;border-radius:50%;background:linear-gradient(#f04b62 0 48%,#18243c 49% 54%,#eef4ff 55% 100%);box-shadow:0 0 16px #fff8;pointer-events:none}.g9-switch-ball:after{content:\" \";position:absolute;left:10px;top:10px;width:9px;height:9px;border:2px solid #26324d;border-radius:50%;background:#fff}.g9-preview .g9-primary{margin-top:6px}@media(max-width:760px){.g9-preview-columns{grid-template-columns:1fr}.g9-preview-team{grid-template-columns:repeat(2,minmax(0,1fr))}.g9-preview-clock{flex-wrap:wrap}.g9-active-sprite{height:86px}.g9-active-sprite img{max-height:86px}}";
   // Keep move names and PP readable while the turn is resolving; disabled state still blocks input.
   css.textContent += ".g9 .g9-move:disabled{opacity:1!important;filter:saturate(.62) brightness(.94);cursor:not-allowed}.g9 .g9-move:disabled b{color:#f2f5ff}.g9 .g9-move:disabled small,.g9 .g9-move:disabled strong{color:#c4d0ed}";
   document.head.appendChild(css);
@@ -570,6 +697,15 @@ document.head.appendChild(onlineCss);
     const b=event.target.closest("[data-g9]");if(!b)return;
     const kind=b.dataset.g9;
     if(kind==="gimmick"){const mode=b.dataset.mode||"";gimmick=gimmick===mode?"":mode;repaint();return;}
+    if(kind==="team-up"||kind==="team-down"){
+      const index=Number(b.dataset.index),next=index+(kind==="team-up"?-1:1);
+      if(Number.isInteger(index)&&next>=0&&next<previewOrder.length){
+        [previewOrder[index],previewOrder[next]]=[previewOrder[next],previewOrder[index]];
+        repaint();
+      }
+      return;
+    }
+    if(kind==="team-ready"){void act({teamOrder:previewOrder.slice()});return;}
     if(kind==="diagnose"){void runDiagnostic();return;}
     if(kind==="standard-battle"){event.preventDefault();event.stopImmediatePropagation();switchToStandardBattle("ホームの通常バトルへ移動しました。全世代Showdown対戦はそのまま残っています。");return;}
     event.preventDefault();event.stopImmediatePropagation();
