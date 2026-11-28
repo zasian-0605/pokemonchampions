@@ -268,6 +268,7 @@ function snapshot(session, cursor = 0) {
     turn:Number(session.requests.p1?.rqid || 0),
     request:session.requests.p1,
     opponentRequest:session.requests.p2,
+    opponentReady:!!session.cpuTeamChoice,
     logs:session.logs.slice(start),
     logCursor:session.logs.length,
     done:session.done,
@@ -471,7 +472,9 @@ async function submitAction(payload) {
   if (session.done) return snapshot(session, payload.cursor);
   const p1Version = session.requestVersion.p1;
   const playerChoice = buildChoice(session, payload.action || {});
-  const cpuChoice = chooseCpuAction(session.requests.p2);
+  const cpuChoice = session.requests.p2?.teamPreview
+    ? (session.cpuTeamChoice || chooseCpuAction(session.requests.p2))
+    : chooseCpuAction(session.requests.p2);
   session.phase = session.requests.p1?.teamPreview ? "チーム選出確定" : "ターン処理";
   session.battle.choose("p1", playerChoice);
   if (cpuChoice) session.battle.choose("p2", cpuChoice);
