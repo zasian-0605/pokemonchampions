@@ -137,10 +137,10 @@
 
   function findMegaEnergy(id) {
     try {
-      const items = Array.isArray(MEGA_STONES) ? MEGA_STONES : [];
+      const items = Array.isArray(W.MEGA_STONES) ? W.MEGA_STONES : [];
       return items.find((item) =>
         normalizedId(item.id) === normalizedId(id) ||
-        normalizedId(typeof itemSlug === "function" ? itemSlug(item.id) : item.id) === normalizedId(id)
+        normalizedId(typeof W.itemSlug === "function" ? W.itemSlug(item.id) : item.id) === normalizedId(id)
       ) || null;
     } catch (_) {
       return null;
@@ -150,9 +150,11 @@
   function megaEnergyArtwork(item) {
     if (!item) return '<div class="v38-energy-placeholder" aria-hidden="true">✦</div>';
     try {
-      const form = typeof v174MegaForm === "function" ? v174MegaForm(item.meta) : null;
-      if (form && typeof speciesIcon === "function") {
-        return speciesIcon(form, false, false);
+      const form = typeof W.findMegaForm === "function" ? W.findMegaForm({
+        speciesId: item.meta?.base, baseSpeciesId: item.meta?.base, heldItem: item.id
+      }) : null;
+      if (form && typeof W.speciesIcon === "function") {
+        return W.speciesIcon(form, false, false);
       }
     } catch (error) {
       console.warn("[v38 energy artwork]", error);
