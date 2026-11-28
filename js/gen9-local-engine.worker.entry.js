@@ -479,11 +479,13 @@ async function submitAction(payload) {
   session.battle.choose("p1", playerChoice);
   if (cpuChoice) session.battle.choose("p2", cpuChoice);
   session.battle.sendUpdates();
+  const wasTeamPreview=!!session.requests.p1?.teamPreview;
   await waitFor(session, () =>
     session.done || (
       session.requestVersion.p1 > p1Version &&
       !!session.requests.p1 &&
-      !session.requests.p1.wait
+      !session.requests.p1.wait &&
+      (!wasTeamPreview || !session.requests.p1.teamPreview)
     )
   );
   session.lastActive = Date.now();
