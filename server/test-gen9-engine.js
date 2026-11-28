@@ -202,21 +202,26 @@ async function main() {
   const p2 = service.snapshot(onlineSession, "p2", 0);
   assert.ok(p2.token);
   assert.notEqual(online.token, p2.token, "each online player must have a different session token");
-  assert.ok(online.request?.active?.[0]?.moves?.length);
-  assert.ok(p2.request?.active?.[0]?.moves?.length);
+  assert.equal(online.request?.teamPreview, true, "online battles should begin with team preview");
+  assert.equal(p2.request?.teamPreview, true, "both online players should choose before the battle begins");
+  assert.ok(online.opponentRequest?.teamPreview, "each player should receive the opponent's public team preview");
 
-  service.validateAction(online.battleId, online.token, "p1", { moveIndex:0 });
-  service.validateAction(online.battleId, p2.token, "p2", { moveIndex:0 });
+  const p1TeamOrder = online.request.side.pokemon.map((_, index) => index);
+  const p2TeamOrder = p2.request.side.pokemon.map((_, index) => index);
+  service.validateAction(online.battleId, online.token, "p1", { teamOrder:p1TeamOrder });
+  service.validateAction(online.battleId, p2.token, "p2", { teamOrder:p2TeamOrder });
   const onlineNext = await service.submitOnlineTurn(
     online.battleId,
     online.token,
     p2.token,
-    { p1:{ moveIndex:0 }, p2:{ moveIndex:0 } },
+    { p1:{ teamOrder:p1TeamOrder }, p2:{ teamOrder:p2TeamOrder } },
     online.logCursor || 0,
     p2.logCursor || 0
   );
-  assert.ok(onlineNext.p1.request || onlineNext.p1.done);
-  assert.ok(onlineNext.p2.request || onlineNext.p2.done);
+  assert.equal(onlineNext.p1.request?.teamPreview, false, "both team selections should complete online preview");
+  assert.equal(onlineNext.p2.request?.teamPreview, false, "both online players should enter the battle together");
+  assert.ok(onlineNext.p1.request?.active?.[0]?.moves?.length || onlineNext.p1.done);
+  assert.ok(onlineNext.p2.request?.active?.[0]?.moves?.length || onlineNext.p2.done);
   assert.equal(onlineNext.p1.token, online.token);
   assert.equal(onlineNext.p2.token, p2.token);
   assert.equal(service.destroy(online.battleId), true);
