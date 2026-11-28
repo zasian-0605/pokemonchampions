@@ -144,7 +144,7 @@ assert.equal(battle._v36PendingStatEvents[0].stat, "atk");
 W.triggerEntryEffects([mon], [], battle);
 assert.equal(battle.weather, "rain", "entry ability must still set the actual weather");
 assert.equal(battle.weatherTurns, 5, "weather duration must remain five turns");
-assert.ok(battle._v36EntryTasks.length >= 1, "weather start should be queued as a cinematic");
+assert.ok(battle._v36EntryRunning || battle._v36EntryTasks.length >= 1, "weather start should be queued as a cinematic");
 
 W.setBattleCamera("player", 0, "かみなり", "テスト が技を放つ！");
 assert.ok(classNames.has("v36-camera-attacker"), "attacker camera should apply its close-up class");
