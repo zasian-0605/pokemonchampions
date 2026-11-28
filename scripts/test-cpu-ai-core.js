@@ -84,6 +84,11 @@ const window = {
     baselineCalls++;
     return { actorUid: 'enemy-1', moveId: 'baseline' };
   },
+  executeAction(action, battleArg) {
+    if (action && action.side === 'enemy' && action.switchTo != null) {
+      battleArg.enemyActive[action.slot || 0] = action.switchTo;
+    }
+  },
   renderBattlePage() {
     return '<div class="grid two-col"><button data-action="battle-mode">Start</button></div>';
   },
@@ -223,5 +228,23 @@ assert.equal(switchAction && switchAction.switchTo, 1,
 switchFire.volatile.trapped = true;
 assert.equal(api.chooseSwitch(switchFire, switchRock, switchBattle), null,
   'CPU must not switch when trapped');
+switchFire.volatile.trapped = false;
+
+// Record the switch only when the action actually executes, then verify the
+// proactive-switch cooldown and the A -> B -> A bounce guard.
+window.executeAction(Object.assign({}, switchAction, { side: 'enemy', slot: 0 }), switchBattle);
+assert.equal(switchBattle.enemyActive[0], 1);
+assert.equal(switchBattle._cpuSwitchHistory.length, 1);
+assert.equal(switchBattle._cpuSwitchHistory[0].fromUid, 'switch-fire');
+assert.equal(switchBattle._cpuSwitchHistory[0].toUid, 'switch-water');
+
+switchRock.types = ['Grass'];
+switchRock.moves = [{ id: 'leafblade', pp: 10 }];
+switchBattle.turn = 5;
+assert.equal(api.chooseSwitch(switchWater, switchRock, switchBattle), null,
+  'CPU should not make another proactive switch immediately after switching');
+switchBattle.turn = 7;
+assert.equal(api.chooseSwitch(switchWater, switchRock, switchBattle), null,
+  'CPU should not immediately switch back to the Pokémon it just withdrew');
 
 console.log('CPU AI core tests passed.');

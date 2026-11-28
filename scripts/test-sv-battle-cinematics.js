@@ -50,14 +50,20 @@ const mon = {
   abilityId: "drizzle",
   stages: { atk: 0, def: 0, spa: 0, spd: 0, spe: 0, accuracy: 0, evasion: 0 }
 };
+const foe = {
+  uid: "enemy-1", name: "相手",
+  hp: 100, maxhp: 100, fainted: false,
+  abilityId: "clearbody",
+  stages: { atk: 0, def: 0, spa: 0, spd: 0, spe: 0, accuracy: 0, evasion: 0 }
+};
 const battle = {
   turn: 2,
   weather: null,
   weatherTurns: 0,
   playerTeam: [mon],
   playerActive: [0],
-  enemyTeam: [],
-  enemyActive: [],
+  enemyTeam: [foe],
+  enemyActive: [0],
   log: []
 };
 
@@ -144,7 +150,7 @@ assert.equal(battle._v36PendingStatEvents[0].stat, "atk");
 
 W.executeAction({}, battle);
 assert.ok(battle._v36PendingStatEvents.some((event) =>
-  event.uid === "e1" && event.stat === "atk" && event.delta === -1
+  event.uid === "enemy-1" && event.stat === "atk" && event.delta === -1
 ), "direct stat changes made by battle effects should also be shown");
 
 W.triggerEntryEffects([mon], [], battle);

@@ -6,7 +6,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node server/test-gen9-engine.js && node scripts/test-cpu-ai-core.js && node scripts/test-forced-turn-flow.js && node scripts/test-sv-battle-cinematics.js",
+    "test": "node server/test-gen9-engine.js && node scripts/test-cpu-ai-core.js && node scripts/test-forced-turn-flow.js && node scripts/test-sv-battle-cinematics.js && node scripts/test-showdown-rules.js && node scripts/test-browser-gen9.js",
     "data:export": "node scripts/export-showdown-catalog.js",
     "build:browser-gen9": "node scripts/build-browser-gen9.js",
     "postinstall": "node scripts/build-browser-gen9.js",
@@ -15,7 +15,9 @@
     "test:runtime-overrides": "node scripts/test-runtime-overrides.js",
     "test:cpu-ai-core": "node scripts/test-cpu-ai-core.js",
     "test:forced-turn-flow": "node scripts/test-forced-turn-flow.js",
-    "test:sv-battle-cinematics": "node scripts/test-sv-battle-cinematics.js"
+    "test:sv-battle-cinematics": "node scripts/test-sv-battle-cinematics.js",
+    "test:showdown-rules": "node scripts/test-showdown-rules.js",
+    "test:showdown-browser": "node scripts/test-browser-gen9.js"
   },
   "engines": {
     "node": ">=22.18.0"

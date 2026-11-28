@@ -30,9 +30,7 @@ jobs:
         run: npm run test:runtime-overrides
       - name: Rebuild and validate committed catalogue
         run: npm run data:export
-      - name: Run Generation 9 simulator smoke test
+      - name: Run full battle and offline Showdown regression suite
         run: npm test
-      - name: Run browser Worker and fallback smoke tests
-        run: npm run test:browser-gen9
       - name: Run compact battle UI smoke tests
         run: npm run test:battle-ui

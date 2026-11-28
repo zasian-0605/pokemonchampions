@@ -93,10 +93,23 @@ async function testBrowserWorkerCpuBattle() {
   assert.ok(next.request || next.done, "the Worker should resolve at least one battle turn");
   assert.ok(next.logs.length > 0 || next.done, "the battle turn should produce a log or finish");
 
+  const mechanics = await call("diagnose", { playerTeam: validTeam() });
+  assert.equal(mechanics.ok, true, "the local Showdown mechanics audit should complete");
+  const dreamAudit = mechanics.mechanicsAudit?.dreamEater || {};
+  assert.equal(dreamAudit.available, true, "Showdown should expose Dream Eater's immunity rule");
+  assert.equal(dreamAudit.awakeRejected, true, "Dream Eater should fail against an awake target");
+  assert.equal(dreamAudit.asleepAllowed, true, "Dream Eater should work against a sleeping target");
+  assert.equal(dreamAudit.comatoseAllowed, true, "Comatose should count as asleep for Dream Eater");
+  assert.equal(
+    mechanics.mechanicsAudit?.availableSvAbilities,
+    mechanics.mechanicsAudit?.totalCheckedSvAbilities,
+    "the bundled Showdown simulator should expose all sampled SV ability event hooks"
+  );
+
   await call("stop");
 }
 
-async function testWorkerFailureFallback() {
+async function testWorkerFailureDoesNotSwitchEngines() {
   const source = fs.readFileSync(WORKER_UI, "utf8");
   const handlers = [];
   const workerInstances = [];
@@ -176,21 +189,22 @@ async function testWorkerFailureFallback() {
   clickHandler(event);
 
   await new Promise(resolve => setTimeout(resolve, 80));
-  assert.equal(state.page, "battle", "Worker startup failure should return to the built-in battle page");
+  assert.equal(state.page, "gen9-battle", "Worker startup failure should keep the player on the Showdown page");
   assert.deepEqual(state.team, [owned.uid], "the selected team should be preserved");
   assert.ok(workerInstances.length > 0, "the test should instantiate the Worker");
   assert.ok(workerInstances[0].url.includes("/js/gen9-local-engine.worker.js?v=33.0.0"),
     "the Worker URL should resolve from the patch script path");
   assert.ok(workerInstances[0].terminated, "the failed Worker should be terminated");
-  assert.ok(toasts.some(item => item.message.includes("通常バトルへ切り替えました")),
-    "the fallback should be clearly announced");
+  assert.equal(toasts.length, 0, "Showdown startup failure must not silently switch battle engines");
+  assert.ok(main.innerHTML.includes("独自エンジンには自動で切り替えていません"),
+    "the player should see that Showdown did not start and that no fallback was performed");
 }
 
 async function main() {
   await testBrowserWorkerCpuBattle();
   console.log("PASS: browser-local Showdown Worker starts a CPU battle and resolves a turn.");
-  await testWorkerFailureFallback();
-  console.log("PASS: Worker startup failure returns to the built-in battle and preserves the team.");
+  await testWorkerFailureDoesNotSwitchEngines();
+  console.log("PASS: Worker startup failure stays on the Showdown page and does not silently switch engines.");
 }
 
 main().catch(error => {

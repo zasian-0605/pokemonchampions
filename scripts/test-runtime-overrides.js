@@ -80,11 +80,11 @@ assert.ok(itemPatch.includes("W.findMegaForm?.({...mon,heldItem:it.id})"),
 assert.ok(itemPatch.includes("function transferHeldStock(stock,oldId,newId)") &&
   itemPatch.includes("function undoReturnedMegaStone(stock,oldId,newId)"),
   'ordinary held items and Mega Stones must use the centralized stock transfer helpers');
-const helperStart = itemPatch.indexOf('function transferHeldStock');
-const helperEnd = itemPatch.indexOf('function optionsFor', helperStart);
-assert.ok(helperStart >= 0 && helperEnd > helperStart, 'item stock transfer helpers must be extractable');
+const itemHelperStart = itemPatch.indexOf('function transferHeldStock');
+const itemHelperEnd = itemPatch.indexOf('function optionsFor', itemHelperStart);
+assert.ok(itemHelperStart >= 0 && itemHelperEnd > itemHelperStart, 'item stock transfer helpers must be extractable');
 const helperContext = { num: value => Math.max(0,Math.floor(Number(value)||0)), megaMap: () => new Map([['charizarditex',{}]]) };
-const stockHelpers = vm.runInNewContext(itemPatch.slice(helperStart,helperEnd) + String.fromCharCode(10) +
+const stockHelpers = vm.runInNewContext(itemPatch.slice(itemHelperStart,itemHelperEnd) + String.fromCharCode(10) +
   '({transferHeldStock,undoReturnedMegaStone})', helperContext);
 const sampleStock = {choicespecs:1,lifeorb:1,charizarditex:0};
 stockHelpers.transferHeldStock(sampleStock,'choicespecs','lifeorb');

@@ -474,6 +474,69 @@ function getCounts() {
   };
 }
 
+function auditBattleMechanics() {
+  const dreamEater = Dex.moves.get("dreameater");
+  const makeTarget = (status, comatose) => ({
+    status,
+    hasAbility: ability => ability === "comatose" && !!comatose
+  });
+  const dreamEaterRuleAvailable = !!dreamEater?.exists &&
+    typeof dreamEater.onTryImmunity === "function";
+  const dreamEaterChecks = {
+    available: dreamEaterRuleAvailable,
+    awakeRejected: dreamEaterRuleAvailable &&
+      dreamEater.onTryImmunity(makeTarget("", false)) === false,
+    asleepAllowed: dreamEaterRuleAvailable &&
+      dreamEater.onTryImmunity(makeTarget("slp", false)) === true,
+    comatoseAllowed: dreamEaterRuleAvailable &&
+      dreamEater.onTryImmunity(makeTarget("", true)) === true
+  };
+
+  const abilityRequirements = [
+    ["orichalcumpulse", ["onStart", "onModifyAtk"]],
+    ["hadronengine", ["onStart", "onModifySpA"]],
+    ["wellbakedbody", ["onTryHit"]],
+    ["windrider", ["onTryHit", "onSideConditionStart"]],
+    ["seedsower", ["onDamagingHit"]],
+    ["opportunist", ["onFoeAfterBoost"]],
+    ["toxicdebris", ["onDamagingHit"]],
+    ["armortail", ["onFoeTryMove"]],
+    ["supremeoverlord", ["onStart", "onBasePower"]],
+    ["tabletsofruin", ["onAnyModifyAtk"]],
+    ["vesselofruin", ["onAnyModifySpA"]],
+    ["swordofruin", ["onAnyModifyDef"]],
+    ["beadsofruin", ["onAnyModifySpD"]],
+    ["electromorphosis", ["onDamagingHit"]],
+    ["myceliummight", ["onFractionalPriority", "onModifyMove"]],
+    ["goodasgold", ["onTryHit"]],
+    ["hospitality", ["onStart"]],
+    ["supersweetsyrup", ["onStart"]],
+    ["eartheater", ["onTryHit"]],
+    ["thermalexchange", ["onDamagingHit", "onSetStatus"]],
+    ["angershell", ["onAfterMoveSecondary"]],
+    ["rockypayload", ["onModifyAtk", "onModifySpA"]],
+    ["toxicchain", ["onSourceDamagingHit"]],
+    ["teraformzero", ["onAfterTerastallization"]]
+  ];
+  const svAbilityHooks = abilityRequirements.map(([id, hooks]) => {
+    const ability = Dex.abilities.get(id);
+    const availableHooks = hooks.filter(hook => typeof ability?.[hook] === "function");
+    return {
+      id,
+      exists: !!ability?.exists,
+      availableHooks,
+      requiredHooks: hooks,
+      complete: !!ability?.exists && availableHooks.length === hooks.length
+    };
+  });
+  return {
+    dreamEater: dreamEaterChecks,
+    svAbilityHooks,
+    availableSvAbilities: svAbilityHooks.filter(item => item.complete).length,
+    totalCheckedSvAbilities: svAbilityHooks.length
+  };
+}
+
 async function diagnose(payload) {
   let phase = "プレイヤーチーム検証";
   let temp = null;
@@ -492,6 +555,7 @@ async function diagnose(payload) {
       format:FORMAT_ID,
       formatName:Dex.formats.get(FORMAT_ID).name,
       counts:getCounts(),
+      mechanicsAudit:auditBattleMechanics(),
       opponentTeamSize:opponentTeam.length,
       initialRequestReady:!!temp.requests.p1 && !!temp.requests.p2 &&
         !temp.requests.p1.teamPreview && !temp.requests.p2.teamPreview

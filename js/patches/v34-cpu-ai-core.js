@@ -441,6 +441,11 @@
       b._cpuSwitchReservations = [];
     }
     const reserved = new Set(b._cpuSwitchReservations || []);
+    // One voluntary switch at most per turn. Record only switches that really execute.
+    if (reserved.size > 0) return null;
+
+    const history = Array.isArray(b._cpuSwitchHistory) ? b._cpuSwitchHistory : [];
+    const lastSwitch = history.length ? history[history.length - 1] : null;
     let actualIncoming = { damage: 0, effectiveness: 1 };
     for (const attacker of playerTargets) {
       const threat = bestMoveValue(attacker, [mon], b);
@@ -448,7 +453,24 @@
     }
     const currentOutgoing = bestMoveValue(mon, playerTargets, b);
     const currentRisk = actualIncoming.damage / Math.max(1, Number(mon.hp || 1));
-    if (currentRisk < 0.2 && actualIncoming.effectiveness < 2) return null;
+    const emergency = currentRisk >= 0.95 ||
+      (Number(mon.hp || 0) / Math.max(1, Number(mon.maxhp || 1)) <= 0.2 && currentRisk >= 0.6);
+
+    // Do not abandon a live knockout opportunity just to rotate the team.
+    const canKnockOutNow = playerTargets.some(member =>
+      currentOutgoing.damage >= Number(member.hp || 1) * 0.98
+    );
+    if (canKnockOutNow) return null;
+
+    // Require a real defensive problem, not a merely imperfect matchup.
+    const dangerThreshold = actualIncoming.effectiveness >= 2 ? 0.35 : 0.55;
+    if (!emergency && currentRisk < dangerThreshold) return null;
+
+    // Cool down proactive switches and prevent the immediate A -> B -> A bounce.
+    if (lastSwitch) {
+      const turnsSinceSwitch = Number(b.turn || 0) - Number(lastSwitch.turn || 0);
+      if (!emergency && turnsSinceSwitch < 3) return null;
+    }
 
     const targetHp = playerTargets.reduce((sum, member) => sum + Number(member.hp || 1), 0) / playerTargets.length;
     const currentUtility = currentOutgoing.damage / Math.max(1, targetHp) - currentRisk;
@@ -459,7 +481,11 @@
       const candidate = team[index];
       if (!candidate || candidate.fainted || Number(candidate.hp || 0) <= 0 ||
           Number(candidate.maxhp || 1) <= 0) continue;
-      if (Number(candidate.hp) / Number(candidate.maxhp) < 0.3) continue;
+      if (Number(candidate.hp) / Number(candidate.maxhp) < 0.35) continue;
+      if (lastSwitch &&
+          lastSwitch.toUid === mon.uid &&
+          lastSwitch.fromUid === candidate.uid &&
+          Number(b.turn || 0) - Number(lastSwitch.turn || 0) < 4) continue;
 
       let candidateIncoming = { damage: 0, effectiveness: 1 };
       for (const attacker of playerTargets) {
@@ -470,9 +496,9 @@
       const risk = candidateIncoming.damage / Math.max(1, Number(candidate.hp || 1));
       const utility = outgoing.damage / Math.max(1, targetHp) - risk;
 
-      if (risk > currentRisk * 0.72) continue;
-      if (outgoing.damage < Math.max(currentOutgoing.damage * 0.65, targetHp * 0.1)) continue;
-      if (utility <= currentUtility + 0.12) continue;
+      if (risk > Math.min(0.6, currentRisk * 0.65)) continue;
+      if (outgoing.damage < Math.max(currentOutgoing.damage * 0.8, targetHp * 0.12)) continue;
+      if (utility <= currentUtility + 0.18) continue;
       if (!bestChoice || utility > bestChoice.utility) bestChoice = { index: index, utility: utility };
     }
 
@@ -520,6 +546,38 @@
       actorUid: mon.uid,
       moveId: selected.id,
       targetUid: target && target.uid
+    };
+  }
+
+  const originalExecuteActionForSwitchHistory = window.executeAction;
+  if (typeof originalExecuteActionForSwitchHistory === 'function') {
+    window.executeAction = function recordActualCpuSwitch(action, battle) {
+      const actualBattle = getBattle(battle);
+      const side = action && action.side || 'player';
+      const slot = Number(action && action.slot || 0);
+      const team = side === 'enemy' ? actualBattle && actualBattle.enemyTeam : null;
+      const active = side === 'enemy' ? actualBattle && actualBattle.enemyActive : null;
+      const beforeIndex = Array.isArray(active) ? active[slot] : -1;
+      const beforeMon = Array.isArray(team) ? team[beforeIndex] : null;
+      const result = originalExecuteActionForSwitchHistory.apply(this, arguments);
+      if (side === 'enemy' && action && action.switchTo != null &&
+          Array.isArray(team) && Array.isArray(active)) {
+        const afterMon = team[active[slot]];
+        if (beforeMon && afterMon && beforeMon.uid !== afterMon.uid) {
+          actualBattle._cpuSwitchHistory = Array.isArray(actualBattle._cpuSwitchHistory)
+            ? actualBattle._cpuSwitchHistory : [];
+          actualBattle._cpuSwitchHistory.push({
+            turn: Number(actualBattle.turn || 0),
+            slot,
+            fromUid: beforeMon.uid,
+            toUid: afterMon.uid
+          });
+          if (actualBattle._cpuSwitchHistory.length > 12) {
+            actualBattle._cpuSwitchHistory.splice(0, actualBattle._cpuSwitchHistory.length - 12);
+          }
+        }
+      }
+      return result;
     };
   }
 
