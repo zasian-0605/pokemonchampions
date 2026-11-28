@@ -95,12 +95,11 @@ async function testBrowserWorkerCpuBattle() {
 
   const mechanics = await call("diagnose", { playerTeam: validTeam() });
   assert.equal(mechanics.ok, true, "the local Showdown mechanics audit should complete");
-  assert.deepEqual(mechanics.mechanicsAudit?.dreamEater, {
-    available: true,
-    awakeRejected: true,
-    asleepAllowed: true,
-    comatoseAllowed: true
-  }, "the bundled Showdown data should enforce Dream Eater's sleep rule");
+  const dreamAudit = mechanics.mechanicsAudit?.dreamEater || {};
+  assert.equal(dreamAudit.available, true, "Showdown should expose Dream Eater's immunity rule");
+  assert.equal(dreamAudit.awakeRejected, true, "Dream Eater should fail against an awake target");
+  assert.equal(dreamAudit.asleepAllowed, true, "Dream Eater should work against a sleeping target");
+  assert.equal(dreamAudit.comatoseAllowed, true, "Comatose should count as asleep for Dream Eater");
   assert.equal(
     mechanics.mechanicsAudit?.availableSvAbilities,
     mechanics.mechanicsAudit?.totalCheckedSvAbilities,
