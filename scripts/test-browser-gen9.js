@@ -93,6 +93,20 @@ async function testBrowserWorkerCpuBattle() {
   assert.ok(next.request || next.done, "the Worker should resolve at least one battle turn");
   assert.ok(next.logs.length > 0 || next.done, "the battle turn should produce a log or finish");
 
+  const mechanics = await call("diagnose", { playerTeam: validTeam() });
+  assert.equal(mechanics.ok, true, "the local Showdown mechanics audit should complete");
+  assert.deepEqual(mechanics.mechanicsAudit?.dreamEater, {
+    available: true,
+    awakeRejected: true,
+    asleepAllowed: true,
+    comatoseAllowed: true
+  }, "the bundled Showdown data should enforce Dream Eater's sleep rule");
+  assert.equal(
+    mechanics.mechanicsAudit?.availableSvAbilities,
+    mechanics.mechanicsAudit?.totalCheckedSvAbilities,
+    "the bundled Showdown simulator should expose all sampled SV ability event hooks"
+  );
+
   await call("stop");
 }
 
