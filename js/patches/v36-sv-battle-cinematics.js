@@ -196,8 +196,9 @@
   function queueWeatherVisual(battle, weather, sourceName) {
     if (!battle || !weather) return;
     queueEntryTask(battle, async () => {
-      // The ability popup has its own presentation. Leave a clear beat after it.
-      await delay(1850);
+      // Entry abilities have a 1.75s ability card; leave about one more second before weather.
+      const isMoveWeather = String(sourceName || "").includes("技・特性による天候変化");
+      await delay(isMoveWeather ? 900 : 2750);
       await showWeatherIntro(battle, weather, sourceName);
     });
   }
