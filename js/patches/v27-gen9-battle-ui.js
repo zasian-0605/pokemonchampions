@@ -402,7 +402,7 @@
     const opponentList=session.opponentRequest?.side?.pokemon||[];
     const opponentActiveIndex=activeIndex(session.opponentRequest);
     const opponentActive=opponentActiveIndex>=0?opponentList[opponentActiveIndex]:null;
-    const monName=mon?(team[activeIndex]?.name||nameOf(mon.ident)):"交代を選択";
+    const monName=mon?(team[currentActiveIndex]?.name||nameOf(mon.ident)):"交代を選択";
     const hp=hpOf(mon?.condition),forced=Array.isArray(req.forceSwitch)&&req.forceSwitch.some(Boolean);
     const moves=(active.moves||[]).map((m,i)=>{
       const record=APP()?.getMove?.(m.id),type=record?.type||"",cat=record?.category||"";
