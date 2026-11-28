@@ -307,7 +307,7 @@ class Gen9BattleService {
         !!session.requests.p1 && !!session.requests.p2, REQUEST_TIMEOUT_MS
       );
 
-      if ((session.requests.p1?.teamPreview || session.requests.p2?.teamPreview) && options.kind !== "online") {
+      if (session.requests.p1?.teamPreview || session.requests.p2?.teamPreview) {
         const order = team1.map((_, index) => index + 1).join("");
         await stream.write(">p1 team " + order);
         await stream.write(">p2 team " + team2.map((_, index) => index + 1).join(""));
