@@ -141,15 +141,8 @@ const W = {
   }
 };
 const fakeWindow = W;
-const MEGA_STONES = [{ id: "charizarditex", meta: { forme: "Mega-X" } }];
-function itemSlug(value) { return String(value).toLowerCase().replace(/[^a-z0-9]/g, ""); }
-function v174MegaForm(meta) { return { id: "charizardmegax", meta }; }
-function speciesIcon(form) {
-  return '<img data-sprite-key="' + form.id + '|front|normal|static" src="https://sprites.example/charizard-mega.png" alt="メガリザードンX">';
-}
 const context = {
-  window: fakeWindow, document, state, MEGA_STONES, itemSlug, v174MegaForm, speciesIcon,
-  console, Array, Map, Set, Number, String, Object, Promise, Math
+  window: fakeWindow, document, console, Array, Map, Set, Number, String, Object, Promise, Math
 };
 vm.runInNewContext(patch, context, { filename: "v38-battle-display-fixes.js" });
 
