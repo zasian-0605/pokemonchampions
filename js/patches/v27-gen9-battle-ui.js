@@ -177,7 +177,13 @@
     if(tag==="-immune")return n+" には効果がないようだ…";
     if(tag==="-miss")return "しかし攻撃は外れた！";
     if(tag==="-fail")return "しかしうまく決まらなかった！";
-    if(tag==="-weather")return "天候が変化した："+f[2];
+    if(tag==="-weather"){
+      const weatherNames={
+        raindance:"雨",sunnyday:"晴れ",desolateland:"おおひでり",
+        primordialsea:"おおあめ",sandstorm:"砂あらし",hail:"あられ",snowscape:"雪"
+      };
+      return "天候が変化した："+(weatherNames[idOf(f[2])]||f[2]);
+    }
     if(tag==="-terastallize")return n+" は"+f[3]+"タイプにテラスタルした！";
     if(tag==="-activate"){
       const raw=String(f[3]||"効果");
@@ -190,7 +196,17 @@
     if(tag==="cant")return n+" は行動できなかった。";
     if(tag==="win")return f[2]+" の勝利！";
     if(tag==="tie")return "引き分け！";
-    if(tag==="-sidestart"||tag==="-fieldstart")return "場に効果が発生："+(f[3]||f[2]);
+    if(tag==="-sidestart"||tag==="-fieldstart"){
+      const fieldNames={
+        electricterrain:"エレキフィールド",grassyterrain:"グラスフィールド",
+        psychicterrain:"サイコフィールド",mistyterrain:"ミストフィールド",
+        trickroom:"トリックルーム",tailwind:"おいかぜ",
+        reflect:"リフレクター",lightscreen:"ひかりのかべ",auroraveil:"オーロラベール"
+      };
+      const raw=String(f[3]||f[2]||"");
+      const fieldId=idOf(raw.replace(/^(move|ability):\s*/i,""));
+      return "場に効果が発生："+(fieldNames[fieldId]||raw);
+    }
     if(tag==="-sideend"||tag==="-fieldend")return "場の効果が終了："+(f[3]||f[2]);
     return "";
   }
