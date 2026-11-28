@@ -516,7 +516,11 @@
       socket.addEventListener("close",()=>{
         if(onlineSocket===socket){
           onlineStatus="オンライン接続が切れました。";
-          if(session?.kind==="online"&&!session.done)errorText="接続が切れたため、対戦を続けられません。";
+          stopPreviewClock();
+          if(session?.kind==="online"&&!session.done){
+            errorText="接続が切れたため、対戦を続けられません。";
+            session={...session,done:true,winner:"connection-lost"};
+          }
           busy=false;waitingForOpponent=false;repaint();
         }
       });
