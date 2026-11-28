@@ -63,12 +63,11 @@ assert.equal(window.abilityTriggerOnMove(actor, awake, ordinaryMove, {}), false,
   "ordinary moves must remain unchanged");
 assert.equal(originalCalls, 3);
 
-assert.deepEqual(rules.audit(), {
-  version: 37,
-  dreamEaterHook: true,
-  asleepTargetAllowed: true,
-  awakeTargetBlocked: true,
-  comatoseTargetAllowed: true
-});
+const audit = rules.audit();
+assert.equal(audit.version, 37);
+assert.equal(audit.dreamEaterHook, true);
+assert.equal(audit.asleepTargetAllowed, true);
+assert.equal(audit.awakeTargetBlocked, true);
+assert.equal(audit.comatoseTargetAllowed, true);
 
 console.log("Showdown rules regression tests passed.");
