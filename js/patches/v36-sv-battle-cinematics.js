@@ -281,10 +281,12 @@
     }
     const nextWeather = battle.weather || null;
     if (nextWeather && nextWeather !== previousWeather) {
+      const abilityWeather = {
+        drizzle: "rain", drought: "sun", sandstream: "sand", snowwarning: "snow"
+      };
       const source = (entering || []).find((mon) => mon &&
-        ["drizzle", "drought", "sandstream", "snowwarning"].includes(
-          String(mon.abilityId || "").toLowerCase().replace(/[^a-z]/g, "")
-        ));
+        abilityWeather[String(mon.abilityId || "").toLowerCase().replace(/[^a-z]/g, "")] === nextWeather
+      );
       queueWeatherVisual(battle, nextWeather, source?.name || "特性が発動した");
     }
     queueParadoxVisuals(battle);
@@ -420,6 +422,19 @@
     ".battlefield.v36-camera-attacker .battle-platform:not(.player),.battlefield.v36-camera-defender .battle-platform:not(.enemy){opacity:.18}",
     "#v25-ability-popup{min-width:min(320px,90vw);padding:15px 20px;border-color:#b9eaff99;box-shadow:0 12px 38px #000a,0 0 32px #79dfff35}",
     "#v25-ability-popup .v25-ability-name{font-size:20px}#v25-ability-popup .v25-ability-label{font-size:14px}",
+    ".type-burst.type-normal:before{border-color:#f5f6ff;background:radial-gradient(circle, #ffffff88, transparent 68%);box-shadow:0 0 22px #fff,inset 0 0 18px #fff}",
+    ".type-burst.type-poison:before{border-color:#a4ef9a;background:radial-gradient(ellipse,#b7ff8eaa 0%,#65d47a44 42%,transparent 72%);filter:blur(1px)}",
+    ".type-burst.type-poison:after{height:48%;top:25%;background:repeating-radial-gradient(circle,#c6ffa5 0 2px,transparent 3px 15px);filter:blur(2px)}",
+    ".type-burst.type-ground:before{width:58%;border-color:#d9b17c;border-radius:48% 52% 42% 58%;background:radial-gradient(ellipse,#d3b17e77,transparent 70%);filter:blur(1px)}",
+    ".type-burst.type-ground:after{height:18px;top:54%;background:linear-gradient(90deg,transparent,#dfc18d,#fff1d2,#b78955,transparent);transform:rotate(4deg) scaleX(.12);animation:typeSlash .72s ease-out forwards}",
+    ".type-burst.type-flying:before{border:5px dashed #d5f7ff;border-left-color:transparent;border-right-color:transparent;box-shadow:0 0 26px #b8edff}",
+    ".type-burst.type-flying:after{height:55%;top:22%;background:repeating-linear-gradient(170deg,transparent 0 10px,#e8fbffcc 11px 13px,transparent 14px 27px);transform:rotate(-15deg) scaleX(.2);animation:typeSlash .7s ease-out forwards}",
+    ".type-burst.type-bug:before{border:5px dotted #c7e66a;background:radial-gradient(circle,#eaff9a66,transparent 70%);box-shadow:0 0 28px #d8f36c}",
+    ".type-burst.type-bug:after{height:44%;top:28%;background:radial-gradient(circle,#f7ffae 0 3px,transparent 4px);background-size:23px 19px;filter:drop-shadow(0 0 6px #d7f36a)}",
+    ".type-burst.type-dark:before{border-color:#a58bc9;border-style:dashed;background:radial-gradient(ellipse,#171329dd 0%,#6f4e9988 48%,transparent 73%);box-shadow:0 0 34px #9d76d6}",
+    ".type-burst.type-dark:after{height:62%;top:18%;background:linear-gradient(90deg,transparent,#251b42,#c6a4f5,#251b42,transparent);filter:blur(4px);transform:rotate(-25deg) scaleX(.12);animation:typeSlash .62s ease-out forwards}",
+    ".type-burst.type-fairy:before{border-color:#ffb6e2;background:radial-gradient(circle,#fff2fa99 0%,#ff8ad366 43%,transparent 72%);box-shadow:0 0 30px #ff9ed9,inset 0 0 18px #fff}",
+    ".type-burst.type-fairy:after{height:65%;top:18%;background:radial-gradient(circle,#fff 0 2px,transparent 3px),radial-gradient(circle,#ffb6e7 0 3px,transparent 4px);background-size:29px 27px,43px 37px;filter:drop-shadow(0 0 8px #ff9ed9)}",
     ".v26-paradox-indicator{border-color:#ffbc7188!important;background:#ff9b4324!important;color:#ffe0ae!important;animation:v36ParadoxPulse 1.3s ease-in-out infinite alternate}",
     "@keyframes v36RainFall{from{transform:translate3d(-2%, -5%, 0)}to{transform:translate3d(5%, 18%, 0)}}",
     "@keyframes v36SnowFall{from{transform:translate3d(0,-10%,0)}to{transform:translate3d(2%,12%,0)}}",
