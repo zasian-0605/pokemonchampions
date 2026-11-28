@@ -315,13 +315,9 @@ async function createSession(playerTeam, opponentTeam, playerName, opponentName,
       session.phase = "チーム選出";
       const cpuOrder = "team " + opponentTeam.map((_, index) => index + 1).join("");
       if (options.deferPlayerTeamPreview === true && session.requests.p1?.teamPreview) {
-        // The CPU confirms immediately; the local player chooses the six-mon order in the UI.
-        if (session.requests.p2?.teamPreview) session.battle.choose("p2", cpuOrder);
-        session.battle.sendUpdates();
-        await waitFor(session, () =>
-          !!session.requests.p1?.teamPreview &&
-          !!session.requests.p2 && !session.requests.p2.teamPreview
-        );
+        // Showdown advances team preview only after both sides choose. The CPU preselects
+        // its order when the player submits theirs in submitAction().
+        session.cpuTeamChoice = cpuOrder;
       } else {
         session.battle.choose("p1", "team " + playerTeam.map((_, index) => index + 1).join(""));
         session.battle.choose("p2", cpuOrder);
@@ -475,8 +471,8 @@ async function submitAction(payload) {
   if (session.done) return snapshot(session, payload.cursor);
   const p1Version = session.requestVersion.p1;
   const playerChoice = buildChoice(session, payload.action || {});
-  const cpuChoice = session.requests.p1?.teamPreview ? null : chooseCpuAction(session.requests.p2);
-  session.phase = "ターン処理";
+  const cpuChoice = chooseCpuAction(session.requests.p2);
+  session.phase = session.requests.p1?.teamPreview ? "チーム選出確定" : "ターン処理";
   session.battle.choose("p1", playerChoice);
   if (cpuChoice) session.battle.choose("p2", cpuChoice);
   session.battle.sendUpdates();
