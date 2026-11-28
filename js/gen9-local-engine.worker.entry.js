@@ -268,7 +268,7 @@ function snapshot(session, cursor = 0) {
     turn:Number(session.requests.p1?.rqid || 0),
     request:session.requests.p1,
     opponentRequest:session.requests.p2,
-    opponentReady:!!session.cpuTeamChoice,
+    opponentReady:!!session.preview || !!session.cpuTeamChoice,
     logs:session.logs.slice(start),
     logCursor:session.logs.length,
     done:session.done,
