@@ -108,6 +108,26 @@ window.executeAction(executed[0][0], currentBattle);
 assert.equal(originalExecuteActionCalls, 0, 'immobilized turn should not execute a selected move');
 assert.ok(logs.some(message => message.includes('眠っていて動けない')), 'sleep skip should be logged once');
 
+// Recharge: the move panel is hidden and the existing engine recharge path ends the turn.
+const recharging = makeMon('recharging', { _rechargePending: true });
+currentBattle = makeBattle('singles', [recharging]);
+executed.length = 0;
+const rechargeHtml = window.renderBattlePage();
+assert.ok(rechargeHtml.includes('反動で動けません'), 'recharge should show a forced-turn message');
+flushTimers();
+assert.equal(executed.length, 1, 'recharge turn should advance automatically');
+assert.equal(executed[0][0]._autoSkipTurn, false, 'the engine recharge flag should handle the skip itself');
+
+// Flinch: the volatile is consumed once and the turn is marked for an animation-free skip.
+const flinching = makeMon('flinching', { volatile: { flinch: true } });
+currentBattle = makeBattle('singles', [flinching]);
+executed.length = 0;
+const flinchHtml = window.renderBattlePage();
+assert.ok(flinchHtml.includes('ひるんで動けません'), 'flinch should show a forced-turn message');
+assert.equal(flinching.volatile.flinch, false, 'flinch should be consumed during preflight');
+flushTimers();
+assert.equal(executed[0][0]._autoSkipTurn, true, 'flinch skip should bypass animations');
+
 // Waking this turn is cached so canMove does not do a second sleep roll.
 const waking = makeMon('waking', { status: 'slp', statusTurns: 2 });
 currentBattle = makeBattle('singles', [waking]);
