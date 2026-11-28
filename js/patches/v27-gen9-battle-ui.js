@@ -3,7 +3,7 @@
   "use strict";
   const W=window, APP=()=>W.PokemonChampions2D, S=()=>APP()?.state;
   const PATCH_SCRIPT_URL=document.currentScript?.src||document.baseURI;
-  const GEN9_WORKER_URL=new URL("../gen9-local-engine.worker.js?v=33.0.0",PATCH_SCRIPT_URL).href;
+  const GEN9_WORKER_URL=new URL("../gen9-local-engine.worker.js?v=39.0.0",PATCH_SCRIPT_URL).href;
   const statusJa={brn:"やけど",par:"まひ",slp:"ねむり",frz:"こおり",psn:"どく",tox:"もうどく"};
   let session=null, team=[], busy=false, errorText="", gimmick="", onlineSocket=null, onlineRoomCode="", onlineStatus="", waitingForOpponent=false, opponentName="CPU", diagnosticBusy=false, diagnosticReport="", randomSearching=false, onlineMode="private";
   let previewOrder=[], previewEndsAt=0, previewInterval=null;
@@ -320,7 +320,7 @@
     const member=side==="player"?(team[index]||null):findRequestSpecies(entry);
     const title=member?.name||nameOf(entry?.ident||entry?.details);
     const controls=side==="player"
-      ? '<span class="g9-order-controls"><button data-g9="team-up" data-index="'+position+'" '+(position===0?"disabled":"")+' aria-label="上へ">↑</button><button data-g9="team-down" data-index="'+position+'" '+(position===previewOrder.length-1?"disabled":"")+' aria-label="下へ">↓</button></span>'
+      ? '<span class="g9-order-controls"><button data-g9="team-up" data-index="'+position+'" '+(busy||position===0?"disabled":"")+' aria-label="上へ">↑</button><button data-g9="team-down" data-index="'+position+'" '+(busy||position===previewOrder.length-1?"disabled":"")+' aria-label="下へ">↓</button></span>'
       : '<span class="g9-order-fixed">CPU READY</span>';
     const level=member?.level||String(entry?.details||"").match(/L(\d+)/)?.[1]||"50";
     return '<article class="g9-preview-mon '+side+'"><span class="g9-preview-number">'+(position+1)+'</span><div class="g9-preview-art">'+previewArt(entry,side,index)+'</div><b>'+esc(title)+'</b><small>Lv.'+esc(level)+'</small>'+controls+'</article>';
@@ -342,6 +342,7 @@
     const source=document.querySelector(".g9-active-sprite."+side+" img");
     if(!source)return;
     const rect=source.getBoundingClientRect();
+    source.style.opacity="0";
     const clone=source.cloneNode(true);
     clone.style.cssText="position:fixed;z-index:100000;pointer-events:none;margin:0;left:"+rect.left+"px;top:"+rect.top+"px;width:"+rect.width+"px;height:"+rect.height+"px;object-fit:contain;";
     document.body.appendChild(clone);
@@ -614,8 +615,8 @@
       const result=await localEngineCall("action",{action,cursor:session.logCursor||0});
       const nextPlayer=activeIndex(result.request);
       const nextEnemy=activeIndex(result.opponentRequest);
-      const playerChanged=previousPlayer>=0&&nextPlayer>=0&&previousPlayer!==nextPlayer;
-      const enemyChanged=previousEnemy>=0&&nextEnemy>=0&&previousEnemy!==nextEnemy;
+      const playerChanged=nextPlayer>=0&&previousPlayer!==nextPlayer;
+      const enemyChanged=nextEnemy>=0&&previousEnemy!==nextEnemy;
       if(session.kind!=="online"&&!ownSwitch&&enemyChanged)await animateSwitchOut("enemy");
       if(isTeamChoice)team=(action.teamOrder||[]).map(index=>team[index]).filter(Boolean);
       session={...session,...result,kind:session.kind||"cpu",logs:[...(session.logs||[]),...(result.logs||[])]};
