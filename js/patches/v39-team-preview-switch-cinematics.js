@@ -95,6 +95,7 @@
     const source=doc.querySelector("#mon-"+side+"-"+slot+" img");
     if(!field||!source)return Promise.resolve();
     const rect=source.getBoundingClientRect(),fr=field.getBoundingClientRect();
+    source.style.opacity="0";
     const clone=source.cloneNode(true);
     clone.className=(clone.className||"")+" v39-outgoing-sprite";
     clone.style.cssText="position:absolute;z-index:1000;pointer-events:none;margin:0;left:"+(rect.left-fr.left)+"px;top:"+(rect.top-fr.top)+"px;width:"+rect.width+"px;height:"+rect.height+"px;max-width:none;max-height:none;object-fit:contain;";
@@ -125,7 +126,7 @@
     target.style.opacity="0";
     const reveal=()=>{
       ball.remove();
-      target.style.opacity=oldOpacity||"1";
+      target.style.opacity="1";
       target.animate?.([{opacity:0,transform:"scale(.55)"},{opacity:1,transform:"scale(1)"}],{duration:310,easing:"cubic-bezier(.2,.8,.2,1)"});
     };
     if(reduceMotion()||!ball.animate){reveal();return Promise.resolve();}
@@ -237,12 +238,18 @@
       if(next.fainted||Number(next.hp)<=0){
         battle.playerActive[slot]=-1;
         battle._v39ForcedSwitchSlots.unshift(slot);
+      }else{
+        battle._v39PendingBallSlots=battle._v39PendingBallSlots||[];
+        battle._v39PendingBallSlots.push(slot);
       }
       const state=S();
       if(state)state.selectedActiveSlot=slot;
       if(typeof W.saveLocal==="function")W.saveLocal();
       repaintBattle();
-      if(!battle._v39ForcedSwitchSlots.length)await animateBallIn("player",slot);
+      if(!battle._v39ForcedSwitchSlots.length){
+        const arrivals=(battle._v39PendingBallSlots||[]).splice(0);
+        for(const arrivalSlot of arrivals)await animateBallIn("player",arrivalSlot);
+      }
       if(battle.playerTeam.every(mon=>mon.fainted||Number(mon.hp)<=0)){
         battle.result="lose";
         W.battleLog?.("味方のポケモンが全員倒れた……");
