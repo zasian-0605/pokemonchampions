@@ -150,13 +150,35 @@
       const delta = Number(value || 0) - Number(before?.[stat] || 0);
       if (!delta) continue;
       battle._v36PendingStatEvents = battle._v36PendingStatEvents || [];
+      const duplicate = battle._v36PendingStatEvents.some((event) =>
+        event.uid === target.uid && event.stat === stat && event.delta === delta
+      );
+      if (duplicate) continue;
       battle._v36PendingStatEvents.push({
-        side, slot, stat, delta,
+        uid: target.uid, side, slot, stat, delta,
         title: STAT_NAMES[stat] || stat,
         detail: (delta > 0 ? "↑ " : "↓ ") + (Math.abs(delta) >= 2 ? "ぐーんと" : "") +
           (delta > 0 ? "上がった！" : "下がった！"),
         source: sourceName || ""
       });
+    }
+  }
+
+  function snapshotStages(battle) {
+    const snapshot = new Map();
+    for (const team of [battle?.playerTeam || [], battle?.enemyTeam || []]) {
+      for (const mon of team) {
+        if (mon?.uid) snapshot.set(mon.uid, { ...(mon.stages || {}) });
+      }
+    }
+    return snapshot;
+  }
+
+  function captureActiveStageChanges(battle, before, sourceName) {
+    if (!battle || !before) return;
+    for (const { mon } of activeEntries(battle)) {
+      const oldStages = before.get(mon.uid);
+      if (oldStages) recordBoostChanges(mon, oldStages, sourceName, battle);
     }
   }
 
@@ -266,11 +288,21 @@
     return result;
   });
 
+  wrap("executeAction", (original) => function(action, battleArg) {
+    const battle = battleArg || currentBattle();
+    const previousStages = snapshotStages(battle);
+    const result = original.apply(this, arguments);
+    captureActiveStageChanges(battle, previousStages, "技の効果");
+    return result;
+  });
+
   wrap("triggerEntryEffects", (original) => function(entering, foes, battleArg) {
     const battle = battleArg || currentBattle();
     const previousWeather = battle?.weather || null;
+    const previousStages = snapshotStages(battle);
     const result = original.apply(this, arguments);
     if (!battle) return result;
+    captureActiveStageChanges(battle, previousStages, "特性発動");
     if (!battle._v36IntroStarted && Number(battle.turn || 0) <= 1) {
       battle._v36DeferEntryUntilIntro = true;
     }
