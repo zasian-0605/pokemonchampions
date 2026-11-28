@@ -249,7 +249,20 @@
         "ポケモン "+result.counts.species+"・技 "+result.counts.moves+"・特性 "+result.counts.abilities+"・持ち物 "+result.counts.items);
       check("CPUランダムチーム",result.opponentTeamSize===6,result.opponentTeamSize+"匹を端末内で生成");
       check("初期対戦リクエスト",result.initialRequestReady,"プレイヤー・CPU双方の行動選択を取得");
-      check("CPU戦のサーバーAPI",true,"チーム検証・CPU生成・対戦開始・ターン処理はブラウザ内で実行");
+      check("対戦計算はオフライン",true,"技・特性・ダメージ・ターン処理はブラウザ内Showdown Workerで実行");
+      const audit=result.mechanicsAudit||{};
+      const dream=audit.dreamEater||{};
+      check("夢喰い：起きている相手には失敗",dream.awakeRejected===true,
+        "Showdownの技データによる睡眠条件");
+      check("夢喰い：ねむり・ぜったいねむり",dream.asleepAllowed===true&&dream.comatoseAllowed===true,
+        "ねむり状態とComatoseの例外");
+      const abilities=audit.svAbilityHooks||[];
+      check("SV特性フック",abilities.length>0&&audit.availableSvAbilities===audit.totalCheckedSvAbilities,
+        (audit.availableSvAbilities||0)+"/"+(audit.totalCheckedSvAbilities||0)+"種類の代表的なSV特性イベントを確認");
+      for(const ability of abilities){
+        check("特性："+ability.id,ability.complete===true,
+          (ability.availableHooks||[]).join(", ")+" / 必要："+(ability.requiredHooks||[]).join(", "));
+      }
       diagnosticReport=lines.join("\n")+"\n\n診断完了："+(Date.now()-started)+"ms";
     }catch(error){
       check("ローカルエンジン",false,error?.message||String(error));
