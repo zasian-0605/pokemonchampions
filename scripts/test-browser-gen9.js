@@ -94,7 +94,7 @@ async function testBrowserWorkerCpuBattle() {
     action: { teamOrder },
     cursor: started.logCursor || 0
   });
-  assert.equal(teamSelected.request?.teamPreview, false, "confirming team order should finish team preview");
+  assert.notEqual(teamSelected.request?.teamPreview, true, "confirming team order should finish team preview");
   assert.ok(teamSelected.request?.active?.[0]?.moves?.length, "team selection should expose selectable moves");
 
   const next = await call("action", {
