@@ -303,7 +303,14 @@
         const order=previewOrder.slice();
         stopPreviewClock();
         void act({teamOrder:order});
-      }else repaint();
+      }else{
+        // Update only the timer text. Repainting the whole battle root reloads
+        // animated Pokemon GIFs every second during team preview.
+        const seconds=Math.max(0,Math.ceil((previewEndsAt-Date.now())/1000));
+        const clock=String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");
+        const clockNode=document.querySelector(".g9-preview-clock strong");
+        if(clockNode)clockNode.textContent=clock;
+      }
     },1000);
   }
   function findRequestSpecies(entry){
