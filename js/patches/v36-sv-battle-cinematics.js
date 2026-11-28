@@ -74,6 +74,8 @@
     const field = doc.querySelector?.(".battlefield");
     if (!field) return;
     ensureWeatherLayer();
+    for (const key of ["rain", "sun", "sand", "snow"]) field.classList.remove("weather-" + key);
+    field.classList.add("weather-" + weather);
     field.classList.remove("v36-weather-enter");
     void field.offsetWidth;
     field.classList.add("v36-weather-enter");
