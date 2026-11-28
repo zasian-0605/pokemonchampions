@@ -1072,6 +1072,7 @@ function cinematicResultFromLogs(messages,targetDamaged,move){const text=message
 async function executeTurn(actions){const b=state.battle;if(!b||b.turnBusy||b.result)return;b.turnBusy=true;renderPage();const playerAlive=activeLiving(b.playerTeam,b.playerActive),enemyAlive=activeLiving(b.enemyTeam,b.enemyActive);const auto=[];for(let i=0;i<b.enemyActive.length;i++){const m=b.enemyTeam[b.enemyActive[i]];const tgt=playerAlive[Math.floor(Math.random()*playerAlive.length)];if(m&&!m.fainted&&tgt)auto.push({...chooseEnemyAction(m,tgt),side:'enemy',slot:i});}
  const all=actions.map(a=>({...a,side:b.mode==='online'?(a.side||'player'):'player'})).concat(b.mode==='online'?[]:auto);all.sort((a,c)=>{const am=a.switchTo!=null?7:(getMove(a.moveId)?.priority||0),cm=c.switchTo!=null?7:(getMove(c.moveId)?.priority||0);if(am!==cm)return cm-am;const at=(a.side==='player'?b.playerTeam:b.enemyTeam).find(m=>m.uid===a.actorUid);const ct=(c.side==='player'?b.playerTeam:b.enemyTeam).find(m=>m.uid===c.actorUid);const as=currentStat(at||{stats:{spe:1},stages:{}},'spe')*((b.sideConditions?.[a.side]?.tailwindTurns||0)>0?2:1);const cs=currentStat(ct||{stats:{spe:1},stages:{}},'spe')*((b.sideConditions?.[c.side]?.tailwindTurns||0)>0?2:1);return b.trickRoomTurns>0?as-cs:cs-as;});
  for(const act of all){if(b.result)break;const actorTeam=act.side==='player'?b.playerTeam:b.enemyTeam;const actor=actorTeam.find(m=>m.uid===act.actorUid);if(!actor||actor.fainted||actor.hp<=0)continue;const slot=act.slot||0;
+  if(act._autoSkipTurn){executeAction(act,b);continue;}
   if(actor._rechargePending){actor._rechargePending=false;battleLog(`${actor.name}は反動で動けない！`);continue;}
   if(actor._chargingMove&&act.switchTo==null)act.moveId=actor._chargingMove;
   if(act.switchTo!=null){actor._chargingMove=null;actor._semiInvulnerable=false;clearBattleCamera();await battleCinematicPause(260);executeAction(act,b);renderPage();await battleCinematicPause(250);continue;}
@@ -4595,6 +4596,21 @@ const __V182_CORE_BRIDGE_NAMES = ["$", "$$", "GITHUB_SPRITES", "MEGA_GARCHOMP_FO
   try{Object.defineProperty(window,"animateCinematicPulse",{configurable:true,enumerable:false,get:()=>animateCinematicPulse,set:v=>{animateCinematicPulse=v;}});}catch(_e){}
   try{Object.defineProperty(window,"cinematicResultFromLogs",{configurable:true,enumerable:false,get:()=>cinematicResultFromLogs,set:v=>{cinematicResultFromLogs=v;}});}catch(_e){}
   try{Object.defineProperty(window,"executeTurn",{configurable:true,enumerable:false,get:()=>executeTurn,set:v=>{executeTurn=v;}});}catch(_e){}
+  // Stable battle-runtime bridge for isolated, load-after-app patches.
+  // Keep the internals private while exposing the shared calculations the CPU needs.
+  try{Object.defineProperty(window,"PokemonChampions2DBattleRuntime",{configurable:true,enumerable:false,value:Object.freeze({
+    getMove,calcStats,monSpecies,currentStat,typeMult,resolveContextMoveData,getEffectiveAccuracy,
+    isChargeMove:move=>V170_CHARGE_API.has(Number(move?.apiId||0)),
+    isSemiInvulnerableChargeMove:move=>V170_SEMI_INVULNERABLE_API.has(Number(move?.apiId||0)),
+    isRechargeMove:move=>V170_RECHARGE_API.has(Number(move?.apiId||0)),
+    skipsCharge:(move,actor,battle)=>{
+      const held=String(actor?.heldItem||"").toLowerCase();
+      const powerHerb=held==="powerherb"||held==="パワフルハーブ"||itemSlug(held)==="powerherb";
+      return powerHerb||(Number(move?.apiId||0)===76&&battle?.weather==="sun");
+    },
+    getBattle:()=>state.battle,toast
+  })});}catch(_e){}
+
   try{Object.defineProperty(window,"findMegaForm",{configurable:true,enumerable:false,get:()=>findMegaForm,set:v=>{findMegaForm=v;}});}catch(_e){}
   try{Object.defineProperty(window,"megaEvolve",{configurable:true,enumerable:false,get:()=>megaEvolve,set:v=>{megaEvolve=v;}});}catch(_e){}
   try{Object.defineProperty(window,"openModal",{configurable:true,enumerable:false,get:()=>openModal,set:v=>{openModal=v;}});}catch(_e){}

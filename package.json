@@ -6,16 +6,15 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node server/test-gen9-engine.js",
+    "test": "node server/test-gen9-engine.js && node scripts/test-cpu-ai-core.js && node scripts/test-forced-turn-flow.js",
     "data:export": "node scripts/export-showdown-catalog.js",
     "build:browser-gen9": "node scripts/build-browser-gen9.js",
     "postinstall": "node scripts/build-browser-gen9.js",
     "test:browser-gen9": "node scripts/test-browser-gen9.js",
     "test:battle-ui": "node scripts/test-battle-ui.js",
     "test:runtime-overrides": "node scripts/test-runtime-overrides.js",
-    "test:cpu-difficulty": "node scripts/test-cpu-difficulty.js",
-    "test:cpu-team-training": "node scripts/test-cpu-team-training.js",
-    "test:cpu-switching": "node scripts/test-cpu-switching.js"
+    "test:cpu-ai-core": "node scripts/test-cpu-ai-core.js",
+    "test:forced-turn-flow": "node scripts/test-forced-turn-flow.js"
   },
   "engines": {
     "node": ">=22.18.0"
