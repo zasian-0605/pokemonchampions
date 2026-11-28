@@ -150,7 +150,7 @@ assert.equal(battle._v36PendingStatEvents[0].stat, "atk");
 
 W.executeAction({}, battle);
 assert.ok(battle._v36PendingStatEvents.some((event) =>
-  event.uid === "e1" && event.stat === "atk" && event.delta === -1
+  event.uid === "enemy-1" && event.stat === "atk" && event.delta === -1
 ), "direct stat changes made by battle effects should also be shown");
 
 W.triggerEntryEffects([mon], [], battle);
