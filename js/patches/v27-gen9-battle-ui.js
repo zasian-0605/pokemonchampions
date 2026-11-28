@@ -441,7 +441,7 @@
       socket.addEventListener("error",()=>{
         if(!settled){settled=true;reject(new Error("オンラインサーバーに接続できませんでした。"));}
       });
-      socket.addEventListener("message",event=>{
+      socket.addEventListener("message",async event=>{
         let msg;try{msg=JSON.parse(event.data);}catch(_){return;}
         if(msg.type==="gen9-random-queued"){
           randomSearching=true;busy=false;onlineMode="random";
