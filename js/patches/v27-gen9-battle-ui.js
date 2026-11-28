@@ -3,7 +3,7 @@
   "use strict";
   const W=window, APP=()=>W.PokemonChampions2D, S=()=>APP()?.state;
   const PATCH_SCRIPT_URL=document.currentScript?.src||document.baseURI;
-  const GEN9_WORKER_URL=new URL("../gen9-local-engine.worker.js?v=39.0.1",PATCH_SCRIPT_URL).href;
+  const GEN9_WORKER_URL=new URL("../gen9-local-engine.worker.js?v=39.0.2",PATCH_SCRIPT_URL).href;
   const statusJa={brn:"やけど",par:"まひ",slp:"ねむり",frz:"こおり",psn:"どく",tox:"もうどく"};
   let session=null, team=[], busy=false, errorText="", gimmick="", onlineSocket=null, onlineRoomCode="", onlineStatus="", waitingForOpponent=false, opponentName="CPU", diagnosticBusy=false, diagnosticReport="", randomSearching=false, onlineMode="private";
   let previewOrder=[], previewEndsAt=0, previewInterval=null, onlineTeamOrder=null, onlineOutgoingPending=false;
