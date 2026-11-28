@@ -122,6 +122,13 @@ const state = { page: "battle", battle: { turnBusy: true } };
 const W = {
   document,
   scrollY: 120,
+  state,
+  MEGA_STONES: [{ id: "charizarditex", meta: { base: "charizard", forme: "Mega-X" } }],
+  itemSlug(value) { return String(value).toLowerCase().replace(/[^a-z0-9]/g, ""); },
+  findMegaForm() { return { id: "charizardmegax" }; },
+  speciesIcon(form) {
+    return '<img data-sprite-key="' + form.id + '|front|normal|static" src="https://sprites.example/charizard-mega.png" alt="メガリザードンX">';
+  },
   renderBattlePage() { return ""; },
   updateTop() {},
   bindPageEvents() {},
