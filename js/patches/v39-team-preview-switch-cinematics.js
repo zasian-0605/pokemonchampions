@@ -163,7 +163,8 @@
     return originalIntro?.(battle);
   };
   W.startBattle=function(mode){
-    if(mode==="raid")return originalStart?.(mode);
+    const requestedMode=mode??S()?.battleMode;
+    if(requestedMode==="raid")return originalStart?.(mode);
     suppressStartEntry=true;
     try{originalStart?.(mode);}finally{suppressStartEntry=false;}
     const battle=S()?.battle;
