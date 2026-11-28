@@ -518,7 +518,13 @@ async function handleGen9Action(socket,payload) {
   } catch(error) {
     room.actions.delete(player.side);
     if(room.phase==="starting")room.phase="preview";
-    send(socket,{type:"error",message:error.message || "行動を処理できませんでした。"});
+    const message=error.message || "行動を処理できませんでした。";
+    if(room.phase==="preview"&&room.previewStartedAt){
+      room.actions.clear();
+      for(const peer of room.players.values())send(peer.socket,{type:"gen9-room-error",message});
+    }else{
+      send(socket,{type:"error",message});
+    }
   } finally {
     room.resolving=false;
   }
