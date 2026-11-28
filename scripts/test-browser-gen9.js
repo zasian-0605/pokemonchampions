@@ -183,7 +183,7 @@ async function testWorkerFailureDoesNotSwitchEngines() {
   vm.runInNewContext(source, context, { filename: "v27-gen9-battle-ui.js", timeout: 10000 });
 
   const api = window.PokemonChampions2DGen9;
-  assert.equal(api.version, "33.0.0", "the updated Gen 9 UI should be loaded");
+  assert.equal(api.version, "33.0.1", "the updated Gen 9 UI should be loaded");
   api.open();
   const clickHandler = handlers.find(Boolean);
   assert.equal(typeof clickHandler, "function", "the UI click handler should be installed");
