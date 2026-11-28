@@ -181,7 +181,7 @@
             item.meta?.forme === "Mega-Y" ? "MEGA Y" :
             item.meta?.forme === "Mega-Z" ? "MEGA Z" : "MEGA";
           const art = megaEnergyArtwork(item);
-          const decoratedAttributes = attributes.replace(/\\bclass="([^"]*)"/, 'class="$1 v38-energy-card"');
+          const decoratedAttributes = attributes.replace("v30-item-card", "v30-item-card v38-energy-card");
           return '<article' + decoratedAttributes + '><div class="v38-energy-preview">' +
             art + '<span>' + label + ' ENERGY</span></div><div class="v38-energy-content">' +
             body + '</div></article>';
