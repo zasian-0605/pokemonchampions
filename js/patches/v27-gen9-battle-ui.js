@@ -6,7 +6,7 @@
   const GEN9_WORKER_URL=new URL("../gen9-local-engine.worker.js?v=39.0.0",PATCH_SCRIPT_URL).href;
   const statusJa={brn:"やけど",par:"まひ",slp:"ねむり",frz:"こおり",psn:"どく",tox:"もうどく"};
   let session=null, team=[], busy=false, errorText="", gimmick="", onlineSocket=null, onlineRoomCode="", onlineStatus="", waitingForOpponent=false, opponentName="CPU", diagnosticBusy=false, diagnosticReport="", randomSearching=false, onlineMode="private";
-  let previewOrder=[], previewEndsAt=0, previewInterval=null;
+  let previewOrder=[], previewEndsAt=0, previewInterval=null, onlineTeamOrder=null, onlineOutgoingPending=false;
   const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const idOf=v=>String(v||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
   let localWorker=null, localWorkerSequence=0;
@@ -320,8 +320,8 @@
     const member=side==="player"?(team[index]||null):findRequestSpecies(entry);
     const title=member?.name||nameOf(entry?.ident||entry?.details);
     const controls=side==="player"
-      ? '<span class="g9-order-controls"><button data-g9="team-up" data-index="'+position+'" '+(busy||position===0?"disabled":"")+' aria-label="上へ">↑</button><button data-g9="team-down" data-index="'+position+'" '+(busy||position===previewOrder.length-1?"disabled":"")+' aria-label="下へ">↓</button></span>'
-      : '<span class="g9-order-fixed">CPU READY</span>';
+      ? '<span class="g9-order-controls"><button data-g9="team-up" data-index="'+position+'" '+(busy||waitingForOpponent||position===0?"disabled":"")+' aria-label="上へ">↑</button><button data-g9="team-down" data-index="'+position+'" '+(busy||waitingForOpponent||position===previewOrder.length-1?"disabled":"")+' aria-label="下へ">↓</button></span>'
+      : '<span class="g9-order-fixed">'+(session?.kind==="online"?"VS PLAYER":"CPU READY")+'</span>';
     const level=member?.level||String(entry?.details||"").match(/L(\d+)/)?.[1]||"50";
     return '<article class="g9-preview-mon '+side+'"><span class="g9-preview-number">'+(position+1)+'</span><div class="g9-preview-art">'+previewArt(entry,side,index)+'</div><b>'+esc(title)+'</b><small>Lv.'+esc(level)+'</small>'+controls+'</article>';
   }
@@ -333,7 +333,11 @@
     const clock=String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");
     const ownCards=previewOrder.map((originalIndex,position)=>renderPreviewCard(own[originalIndex],"player",originalIndex,position)).join("");
     const foeCards=foe.map((entry,i)=>renderPreviewCard(entry,"enemy",i,i)).join("");
-    return '<section class="g9 g9-preview"><header><div><small>NATIONAL DEX · TEAM PREVIEW</small><h1>対戦前の見せ合い</h1><p>お互いのチームを確認して、こちらの先発と控えの順番を決めよう。</p></div><b class="g9-badge">120 SEC</b></header><div class="g9-preview-clock"><span>対戦開始まで</span><strong>'+clock+'</strong><small>CPU：準備OK</small></div><div class="g9-preview-columns"><section class="g9-card"><div class="g9-preview-heading"><h2>YOUR TEAM</h2><b>'+own.length+'体</b></div><p>↑ ↓ で順番を変更。いちばん上が先発ポケモン。</p><div class="g9-preview-team">'+ownCards+'</div><button class="g9-primary" data-g9="team-ready" '+(busy?"disabled":"")+'>'+(busy?"選出を確定中…":"準備OK！ 対戦開始")+'</button></section><section class="g9-card"><div class="g9-preview-heading"><h2>OPPONENT TEAM</h2><b>'+foe.length+'体</b></div><p>CPUは先に準備OK。相手の技・持ち物は対戦開始まで非公開。</p><div class="g9-preview-team">'+foeCards+'</div><div class="g9-preview-ready">✓ CPU 準備OK</div></section></div><p class="g9-preview-note">120秒で自動確定します。準備OKを押すと、その時点の順番で対戦が始まります。</p></section>';
+    const online=session?.kind==="online";
+    const readyLabel=online?(waitingForOpponent?"選出を送信済み · 相手の確定を待っています":"相手の選出を待っています"):"CPU：準備OK";
+    const readyHtml=online?'<div class="g9-preview-ready">'+esc(readyLabel)+'</div>':'<div class="g9-preview-ready">✓ CPU 準備OK</div>';
+    const readyButton=waitingForOpponent?"送信済み · 相手待ち":busy?"選出を確定中…":"準備OK！ 対戦開始";
+    return '<section class="g9 g9-preview"><header><div><small>NATIONAL DEX · TEAM PREVIEW</small><h1>対戦前の見せ合い</h1><p>お互いのチームを確認して、こちらの先発と控えの順番を決めよう。</p></div><b class="g9-badge">120 SEC</b></header><div class="g9-preview-clock"><span>対戦開始まで</span><strong>'+clock+'</strong><small>'+esc(readyLabel)+'</small></div><div class="g9-preview-columns"><section class="g9-card"><div class="g9-preview-heading"><h2>YOUR TEAM</h2><b>'+own.length+'体</b></div><p>↑ ↓ で順番を変更。いちばん上が先発ポケモン。</p><div class="g9-preview-team">'+ownCards+'</div><button class="g9-primary" data-g9="team-ready" '+(busy||waitingForOpponent?"disabled":"")+'>'+readyButton+'</button></section><section class="g9-card"><div class="g9-preview-heading"><h2>'+(online?esc(opponentName):"OPPONENT TEAM")+'</h2><b>'+foe.length+'体</b></div><p>'+(online?"相手も6体を確認して、先発と控えの順番を選んでいます。":"CPUは先に準備OK。相手の技・持ち物は対戦開始まで非公開。")+'</p><div class="g9-preview-team">'+foeCards+'</div>'+readyHtml+'</section></div><p class="g9-preview-note">120秒で自動確定します。準備OKを押すと、その時点の順番で対戦が始まります。</p></section>';
   }
   function activeIndex(request){
     return (request?.side?.pokemon||[]).findIndex(mon=>!!mon.active);
@@ -459,7 +463,9 @@
           opponentName=msg.opponent||"対戦相手";
           session={...msg.snapshot,kind:"online",side:msg.side,playerName:msg.playerName||"プレイヤー",opponentName};
           team=selectedOwned();waitingForOpponent=false;busy=false;gimmick="";
+          onlineOutgoingPending=false;onlineTeamOrder=null;
           onlineStatus="オンライン対戦中";
+          if(session.request?.teamPreview){previewOrder=(session.request.side?.pokemon||[]).map((_,index)=>index);startPreviewClock();}
           repaint();return;
         }
         if(msg.type==="gen9-action-accepted"){
@@ -469,10 +475,22 @@
         }
         if(msg.type==="gen9-battle-update"&&msg.snapshot){
           const snap=msg.snapshot;
+          const oldPlayer=activeIndex(session?.request),oldEnemy=activeIndex(session?.opponentRequest);
+          const newPlayer=activeIndex(snap.request),newEnemy=activeIndex(snap.opponentRequest);
+          const playerChanged=newPlayer>=0&&oldPlayer!==newPlayer;
+          const enemyChanged=newEnemy>=0&&oldEnemy!==newEnemy;
+          if(playerChanged&&oldPlayer>=0&&!onlineOutgoingPending)await animateSwitchOut("player");
+          if(enemyChanged&&oldEnemy>=0)await animateSwitchOut("enemy");
+          stopPreviewClock();
+          if(onlineTeamOrder&&team.length)team=onlineTeamOrder.map(index=>team[index]).filter(Boolean);
+          onlineTeamOrder=null;onlineOutgoingPending=false;
           session={...session,...snap,kind:"online",logs:[...(session?.logs||[]),...(snap.logs||[])]};
           busy=false;waitingForOpponent=false;gimmick="";
           onlineStatus=session.done?"対戦終了":"オンライン対戦中";
-          repaint();return;
+          repaint();
+          if(playerChanged)await animateSwitchIn("player");
+          if(enemyChanged)await animateSwitchIn("enemy");
+          return;
         }
         if(msg.type==="gen9-forfeit-win"&&session){
           session={...session,done:true,winner:session.playerName};
@@ -595,10 +613,11 @@
     const previousEnemy=activeIndex(session.opponentRequest);
     const ownSwitch=action?.switchTo!=null;
     if(isTeamChoice)stopPreviewClock();
+    if(isTeamChoice&&session.kind==="online")onlineTeamOrder=action.teamOrder.slice();
     busy=true;
     errorText="";
     repaint();
-    if(session.kind!=="online"&&ownSwitch)await animateSwitchOut("player");
+    if(ownSwitch){await animateSwitchOut("player");if(session.kind==="online")onlineOutgoingPending=true;}
     if(session.kind==="online"){
       try{
         if(!onlineSocket||onlineSocket.readyState!==WebSocket.OPEN)throw new Error("オンライン接続が切れています。");
