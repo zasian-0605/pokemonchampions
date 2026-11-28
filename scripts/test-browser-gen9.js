@@ -83,12 +83,21 @@ async function testBrowserWorkerCpuBattle() {
   });
   assert.ok(started.battleId, "CPU battle should return a battle ID");
   assert.ok(started.request, "CPU battle should return the first player request");
-  assert.ok(started.request.active?.[0]?.moves?.length, "CPU battle should expose selectable moves");
+  assert.equal(started.request.teamPreview, true, "CPU battles should pause at team preview");
+  assert.equal(started.request.side?.pokemon?.length, 6, "team preview should expose all six player Pokemon");
+  assert.equal(started.opponentRequest?.teamPreview, false, "CPU should confirm its team before the player");
   assert.equal(started.format, "gen9nationaldexag");
+
+  const teamSelected = await call("action", {
+    action: { teamOrder: [0, 1, 2, 3, 4, 5] },
+    cursor: started.logCursor || 0
+  });
+  assert.equal(teamSelected.request?.teamPreview, false, "confirming team order should finish team preview");
+  assert.ok(teamSelected.request?.active?.[0]?.moves?.length, "team selection should expose selectable moves");
 
   const next = await call("action", {
     action: { moveIndex: 0 },
-    cursor: started.logCursor || 0
+    cursor: teamSelected.logCursor || 0
   });
   assert.ok(next.request || next.done, "the Worker should resolve at least one battle turn");
   assert.ok(next.logs.length > 0 || next.done, "the battle turn should produce a log or finish");
