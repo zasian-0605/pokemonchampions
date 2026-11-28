@@ -85,7 +85,8 @@ async function testBrowserWorkerCpuBattle() {
   assert.ok(started.request, "CPU battle should return the first player request");
   assert.equal(started.request.teamPreview, true, "CPU battles should pause at team preview");
   assert.equal(started.request.side?.pokemon?.length, validTeam().length, "team preview should expose every player Pokemon");
-  assert.equal(started.opponentRequest?.teamPreview, false, "CPU should confirm its team before the player");
+  assert.equal(started.opponentRequest?.teamPreview, true, "Showdown should hold both sides at team preview until both choices are submitted");
+  assert.equal(started.opponentReady, true, "CPU should preselect its lineup and wait ready");
   assert.equal(started.format, "gen9nationaldexag");
 
   const teamOrder = Array.from({ length: started.request.side.pokemon.length }, (_, index) => index);
