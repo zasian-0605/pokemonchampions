@@ -218,7 +218,7 @@ async function main() {
     online.logCursor || 0,
     p2.logCursor || 0
   );
-  assert.equal(onlineNext.p1.request?.teamPreview, false, "both team selections should complete online preview");
+  assert.equal(onlineNext.p1.request?.teamPreview, false, "both team selections should complete online preview; done="+onlineNext.p1.done+" winner="+onlineNext.p1.winner+" logs="+(onlineNext.p1.logs||[]).join("\\n"));
   assert.equal(onlineNext.p2.request?.teamPreview, false, "both online players should enter the battle together");
   assert.ok(onlineNext.p1.request?.active?.[0]?.moves?.length || onlineNext.p1.done);
   assert.ok(onlineNext.p2.request?.active?.[0]?.moves?.length || onlineNext.p2.done);
