@@ -160,7 +160,17 @@
     if(tag==="-heal")return n+" のHPが回復した（"+hpOf(f[3]).text+"）";
     if(tag==="-status")return n+" は"+(statusJa[f[3]]||f[3])+"状態になった！";
     if(tag==="-curestatus")return n+" の"+(statusJa[f[3]]||f[3])+"が治った！";
-    if(tag==="-boost"||tag==="-unboost")return n+" の"+(stats[f[3]]||f[3])+(tag==="-boost"?"が上がった！":"が下がった！");
+    if(tag==="-boost"||tag==="-unboost"){
+      const amount=Math.max(1,Number(f[4])||1);
+      const detail=amount>=2?"ぐーんと":"";
+      return n+" の"+(stats[f[3]]||f[3])+(tag==="-boost"?"が"+detail+"上がった！":"が"+detail+"下がった！");
+    }
+    if(tag==="-ability"){
+      const id=idOf(f[3]);
+      const names=APP()?.state?.data?.abilityNames;
+      const localName=names&&typeof names.get==="function"?(names.get(id)||""):"";
+      return n+" の特性「"+(localName||f[3]||"不明")+"」が発動した！";
+    }
     if(tag==="-crit")return "急所に当たった！";
     if(tag==="-supereffective")return "効果はばつぐんだ！";
     if(tag==="-resisted")return "効果はいまひとつのようだ…";
@@ -169,7 +179,14 @@
     if(tag==="-fail")return "しかしうまく決まらなかった！";
     if(tag==="-weather")return "天候が変化した："+f[2];
     if(tag==="-terastallize")return n+" は"+f[3]+"タイプにテラスタルした！";
-    if(tag==="-activate")return n+" の効果が発動！ "+(f[3]||"");
+    if(tag==="-activate"){
+      const raw=String(f[3]||"効果");
+      const abilityMatch=raw.match(/^ability:\s*(.+)$/i);
+      const names=APP()?.state?.data?.abilityNames;
+      const abilityId=abilityMatch?idOf(abilityMatch[1]):"";
+      const localName=abilityId&&names&&typeof names.get==="function"?(names.get(abilityId)||""):"";
+      return n+" の効果が発動！ "+(localName||raw.replace(/^ability:\s*/i,""));
+    }
     if(tag==="cant")return n+" は行動できなかった。";
     if(tag==="win")return f[2]+" の勝利！";
     if(tag==="tie")return "引き分け！";
@@ -246,7 +263,7 @@
     if(!session){
       const roster=buildTeam();
       const items=roster.map((m,i)=>'<div class="g9-team"><span>'+(i+1)+'</span><b>'+esc(m.name||m.species)+'</b><small>Lv.'+m.level+' · '+m.moves.length+'技</small></div>').join("");
-      return '<section class="g9"><header><div><small>LOCAL SHOWDOWN ENGINE · NATIONAL DEX</small><h1>全世代バトル</h1><p>第1〜9世代のデータを内蔵したShowdownエンジンがブラウザ内で動作します。CPU戦の対戦計算にサーバーAPIは使いません。</p></div><b class="g9-badge">GEN 1–9</b></header><div class="g9-columns"><section class="g9-card"><h2>自分のチーム</h2><p>編成画面で選んだチームを使います。未選択ならボックスの先頭から最大6匹です。</p><div class="g9-roster">'+(items||"ポケモンをスカウトしてください。")+'</div><button class="g9-primary" data-g9="start" '+(!roster.length||busy?"disabled":"")+'>'+(busy?"準備中…":"全世代CPU対戦を開始")+'</button><p>CPUチーム生成・技や特性の効果判定・ダメージ計算は端末内で実行します。オンライン対戦のみ相手との同期にWebSocketを使用します。</p></section><section class="g9-card"><h2>対戦ルール</h2><div class="g9-spec"><span>図鑑</span><b>第1〜9世代（National Dex）</b></div><div class="g9-spec"><span>形式</span><b>シングル 6対6</b></div><div class="g9-spec"><span>ルール</span><b>Gen 9 National Dex AG</b></div><div class="g9-spec"><span>ギミック</span><b>メガシンカ・テラスタル</b></div><p>大会向けの使用制限を外した全国図鑑ルールです。ダイマックスも同じ試合に混ぜるにはShowdown本体の追加改造が必要です。</p></section></div><button class="g9-secondary" data-g9="diagnose" '+(diagnosticBusy?"disabled":"")+'>'+(diagnosticBusy?"診断中…":"不具合を診断する")+'</button>'+(diagnosticReport?'<pre class="g9-diagnostic">'+esc(diagnosticReport)+'</pre>':"")+'<button class="g9-secondary" data-g9="standard-battle">通常バトル（独自エンジン）で遊ぶ</button><p class="g9-online-status">Showdownがこのブラウザで起動できない場合は、ホームの通常バトルへ切り替えられます。Showdown自体は削除されません。</p>'+renderOnlinePanel()+(errorText?'<div class="g9-error">'+esc(errorText)+'</div>':"")+'</section>';
+      return '<section class="g9"><header><div><small>LOCAL SHOWDOWN ENGINE · NATIONAL DEX</small><h1>全世代バトル</h1><p>第1〜9世代のデータを内蔵したShowdownエンジンがブラウザ内で動作します。CPU戦の対戦計算にサーバーAPIは使いません。</p></div><b class="g9-badge">GEN 1–9</b></header><div class="g9-columns"><section class="g9-card"><h2>自分のチーム</h2><p>編成画面で選んだチームを使います。未選択ならボックスの先頭から最大6匹です。</p><div class="g9-roster">'+(items||"ポケモンをスカウトしてください。")+'</div><button class="g9-primary" data-g9="start" '+(!roster.length||busy?"disabled":"")+'>'+(busy?"準備中…":"全世代CPU対戦を開始")+'</button><p>CPUチーム生成・技や特性の効果判定・ダメージ計算は端末内で実行します。オンライン対戦のみ相手との同期にWebSocketを使用します。</p></section><section class="g9-card"><h2>対戦ルール</h2><div class="g9-spec"><span>図鑑</span><b>第1〜9世代（National Dex）</b></div><div class="g9-spec"><span>形式</span><b>シングル 6対6</b></div><div class="g9-spec"><span>ルール</span><b>Gen 9 National Dex AG</b></div><div class="g9-spec"><span>ギミック</span><b>メガシンカ・テラスタル</b></div><p>大会向けの使用制限を外した全国図鑑ルールです。ダイマックスも同じ試合に混ぜるにはShowdown本体の追加改造が必要です。</p></section></div><button class="g9-secondary" data-g9="diagnose" '+(diagnosticBusy?"disabled":"")+'>'+(diagnosticBusy?"診断中…":"不具合を診断する")+'</button>'+(diagnosticReport?'<pre class="g9-diagnostic">'+esc(diagnosticReport)+'</pre>':"")+'<button class="g9-secondary" data-g9="standard-battle">別ルールの独自バトルへ切り替える</button><p class="g9-online-status">通常はオフラインShowdownエンジンを使います。独自バトルへの切り替えは、このボタンを押した場合だけ行います。</p>'+renderOnlinePanel()+(errorText?'<div class="g9-error">'+esc(errorText)+'</div>':"")+'</section>';
     }
     const req=session.request||{},active=req.active?.[0]||{},list=req.side?.pokemon||[];
     const activeIndex=list.findIndex(x=>x.active),mon=activeIndex>=0?list[activeIndex]:null;
@@ -419,9 +436,13 @@
       gimmick="";
     }catch(error){
       const message=error?.message||String(error);
-      if(shouldFallbackToStandardBattle(error)&&switchToStandardBattle("Showdownの起動に失敗したため、ホームの通常バトルへ切り替えました。全世代Showdown対戦は残っており、あとで再試行できます。"))return;
-      errorText=message;
-      diagnosticReport="ローカルCPU対戦の開始に失敗しました。『不具合を診断する』でブラウザ内エンジンを確認できます。";
+      if(shouldFallbackToStandardBattle(error)){
+        errorText="Showdownのローカルエンジンを起動できませんでした。独自エンジンには自動で切り替えていません。\n"+message+"\n『不具合を診断する』で原因を確認してください。";
+        diagnosticReport="Showdownの起動に失敗しました。通常バトル（独自エンジン）へ勝手に切り替えないようにしています。診断結果を確認してください。";
+      }else{
+        errorText=message;
+        diagnosticReport="ローカルCPU対戦の開始に失敗しました。『不具合を診断する』でブラウザ内エンジンを確認できます。";
+      }
     }finally{
       busy=false;
       repaint();
