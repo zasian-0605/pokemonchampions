@@ -268,6 +268,15 @@
     const previousWeather = battle?.weather || null;
     const result = original.apply(this, arguments);
     if (!battle) return result;
+    if (!battle._v36IntroStarted && Number(battle.turn || 0) <= 1) {
+      battle._v36DeferEntryUntilIntro = true;
+    }
+    if (battle._v36PendingStatEvents?.length) {
+      queueEntryTask(battle, async () => {
+        await delay(650);
+        await flushPendingStatVisuals(battle);
+      });
+    }
     const nextWeather = battle.weather || null;
     if (nextWeather && nextWeather !== previousWeather) {
       const source = (entering || []).find((mon) => mon &&
@@ -358,6 +367,9 @@
 
   wrap("animateCinematicProjectile", (original) => async function() {
     const battle = currentBattle();
+    if (battle?._v36EntryCinematicPromise) {
+      await battle._v36EntryCinematicPromise.catch(() => {});
+    }
     await flushPendingStatVisuals(battle);
     const result = await original.apply(this, arguments);
     if (!reducedMotion()) await delay(260);
