@@ -470,7 +470,7 @@
         }
         if(msg.type==="gen9-action-accepted"){
           busy=false;waitingForOpponent=true;
-          onlineStatus="相手の行動を待っています…";
+          onlineStatus=session?.request?.teamPreview?"相手の選出を待っています…":"相手の行動を待っています…";
           repaint();return;
         }
         if(msg.type==="gen9-battle-update"&&msg.snapshot){
