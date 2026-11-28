@@ -203,7 +203,7 @@ async function testWorkerFailureDoesNotSwitchEngines() {
   assert.equal(state.page, "gen9-battle", "Worker startup failure should keep the player on the Showdown page");
   assert.deepEqual(state.team, [owned.uid], "the selected team should be preserved");
   assert.ok(workerInstances.length > 0, "the test should instantiate the Worker");
-  assert.ok(workerInstances[0].url.includes("/js/gen9-local-engine.worker.js?v=33.0.0"),
+  assert.ok(workerInstances[0].url.includes("/js/gen9-local-engine.worker.js?v=39.0.1"),
     "the Worker URL should resolve from the patch script path");
   assert.ok(workerInstances[0].terminated, "the failed Worker should be terminated");
   assert.equal(toasts.length, 0, "Showdown startup failure must not silently switch battle engines");
