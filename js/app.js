@@ -1080,10 +1080,13 @@ async function executeTurn(actions){const b=state.battle;if(!b||b.turnBusy||b.re
   setBattleCamera(act.side,slot,getMoveName(m),`${actor.name} が技を放つ！`);activateMoveAnimation(act.side,slot,m);await battleCinematicPause(680);
   // Run the original battle logic now, but do not redraw yet. HP bars and status UI stay
   // at their pre-hit values until the projectile reaches the target and the camera cuts.
-  executeAction(act,b);const newMessages=b.log.slice(logStart);const targetDamaged=!!(target&&(Number(target.hp||0)<hpBefore||Number(target?.volatile?.substituteHp||0)<substituteBefore));const result=cinematicResultFromLogs(newMessages,targetDamaged,m);const damagingMove=isMoveClassifiedDamageV2(m);const selfTarget=target===actor;
+  const activeBeforeAction={player:[...(b.playerActive||[])],enemy:[...(b.enemyActive||[])]};executeAction(act,b);const switchedSlots=[];for(const side of ["player","enemy"]){const now=side==="player"?b.playerActive:b.enemyActive;const before=activeBeforeAction[side]||[];for(let changedSlot=0;changedSlot<now.length;changedSlot++)if(now[changedSlot]!==before[changedSlot])switchedSlots.push({side,slot:changedSlot});}const newMessages=b.log.slice(logStart);const targetDamaged=!!(target&&(Number(target.hp||0)<hpBefore||Number(target?.volatile?.substituteHp||0)<substituteBefore));const result=cinematicResultFromLogs(newMessages,targetDamaged,m);const damagingMove=isMoveClassifiedDamageV2(m);const selfTarget=target===actor;
   if(target&&!result.blocked&&!selfTarget&&targetSlot>=0&&damagingMove){await animateCinematicProjectile(act.side,slot,targetSide,targetSlot,m);}else if(target&&!result.blocked){await animateCinematicPulse(targetSide,targetSlot,m);}else{await battleCinematicPause(170);}
   // Impact cut: redraw data now, so the HP bar only falls after the visible hit.
-  renderPage();setBattleCamera(targetSide,targetSlot,result.title,`${target?.name||'対象'} · ${result.subtitle}`);if(targetDamaged&&targetSlot>=0)animateHit(targetSide,targetSlot);if(target&&!result.blocked&&!targetDamaged)await animateCinematicPulse(targetSide,targetSlot,m);await battleCinematicPause(720);clearBattleCamera();
+  for(const switched of switchedSlots)await window.PokemonChampions2DSwitchCinematics?.beforeSwitch?.(switched,b);
+   renderPage();
+   for(const switched of switchedSlots)await window.PokemonChampions2DSwitchCinematics?.afterSwitch?.(switched,b);
+   setBattleCamera(targetSide,targetSlot,result.title,`${target?.name||'対象'} · ${result.subtitle}`);if(targetDamaged&&targetSlot>=0)animateHit(targetSide,targetSlot);if(target&&!result.blocked&&!targetDamaged)await animateCinematicPulse(targetSide,targetSlot,m);await battleCinematicPause(720);clearBattleCamera();
  }
  const v39ActiveBefore={player:[...(b.playerActive||[])],enemy:[...(b.enemyActive||[])]};processEndTurn(b);b._v39ActiveBeforeEndTurn=v39ActiveBefore;b.turn++;b.pending={};b.megaPendingSlots=[];state.pendingActions={};state.selectedMove=null;state.selectedActiveSlot=0;b.turnBusy=false;saveLocal();renderPage();await window.PokemonChampions2DSwitchCinematics?.afterEndTurn?.(b,v39ActiveBefore);}
 
