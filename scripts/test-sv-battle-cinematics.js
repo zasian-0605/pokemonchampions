@@ -98,6 +98,7 @@ const W = {
     callDelays.push(ms);
     return Promise.resolve(ms);
   },
+  executeAction() { foe.stages.atk = -1; },
   executeTurn() { return Promise.resolve("turn"); },
   setBattleCamera() {},
   clearBattleCamera() {},
@@ -140,6 +141,11 @@ assert.equal(mon.stages.atk, 2, "boost wrapper must preserve the real stat-stage
 assert.equal(battle._v36PendingStatEvents.length, 1);
 assert.equal(battle._v36PendingStatEvents[0].delta, 2);
 assert.equal(battle._v36PendingStatEvents[0].stat, "atk");
+
+W.executeAction({}, battle);
+assert.ok(battle._v36PendingStatEvents.some((event) =>
+  event.uid === "e1" && event.stat === "atk" && event.delta === -1
+), "direct stat changes made by battle effects should also be shown");
 
 W.triggerEntryEffects([mon], [], battle);
 assert.equal(battle.weather, "rain", "entry ability must still set the actual weather");
