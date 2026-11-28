@@ -592,7 +592,7 @@ function handleMessage(socket, payload) {
     const client=clients.get(socket)||{};
     const room=client.gen9RoomCode?gen9Rooms.get(client.gen9RoomCode):null;
     const side=room?.players.get("p1")?.id===client.playerId?"p1":"p2";
-    if(room&&room.phase==="active") {
+    if(room&&(room.phase==="active"||room.phase==="preview")) {
       const winner=side==="p1"?"p2":"p1";
       room.phase="ended";
       const p=room.players.get(winner);
