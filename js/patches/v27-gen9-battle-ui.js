@@ -319,9 +319,9 @@
     const app=APP();
     return app?.findSpecies?.(key)||app?.state?.data?.dexById?.[key]||{id:key,name:label,jpName:label,displayName:label};
   }
-  function previewArt(entry,side,index){
+  function previewArt(entry,side,index,faceForward=false){
     const member=side==="player"?(team[index]||null):findRequestSpecies(entry);
-    return APP()?.speciesIcon?.(member||findRequestSpecies(entry),side==="player",true)||'<span class="g9-no-sprite">?</span>';
+    return APP()?.speciesIcon?.(member||findRequestSpecies(entry),side==="player"&&!faceForward,true)||'<span class="g9-no-sprite">?</span>';
   }
   function renderPreviewCard(entry,side,index,position){
     const member=side==="player"?(team[index]||null):findRequestSpecies(entry);
@@ -330,7 +330,7 @@
       ? '<span class="g9-order-controls"><button data-g9="team-up" data-index="'+position+'" '+(busy||waitingForOpponent||position===0?"disabled":"")+' aria-label="上へ">↑</button><button data-g9="team-down" data-index="'+position+'" '+(busy||waitingForOpponent||position===previewOrder.length-1?"disabled":"")+' aria-label="下へ">↓</button></span>'
       : '<span class="g9-order-fixed">'+(session?.kind==="online"?"VS PLAYER":"CPU READY")+'</span>';
     const level=member?.level||String(entry?.details||"").match(/L(\d+)/)?.[1]||"50";
-    return '<article class="g9-preview-mon '+side+'"><span class="g9-preview-number">'+(position+1)+'</span><div class="g9-preview-art">'+previewArt(entry,side,index)+'</div><b>'+esc(title)+'</b><small>Lv.'+esc(level)+'</small>'+controls+'</article>';
+    return '<article class="g9-preview-mon '+side+'"><span class="g9-preview-number">'+(position+1)+'</span><div class="g9-preview-art">'+previewArt(entry,side,index,side==="player")+'</div><b>'+esc(title)+'</b><small>Lv.'+esc(level)+'</small>'+controls+'</article>';
   }
   function renderTeamPreview(req){
     const own=req.side?.pokemon||[];
