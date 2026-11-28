@@ -315,19 +315,13 @@ async function createSession(playerTeam, opponentTeam, playerName, opponentName,
     if (session.requests.p1?.teamPreview || session.requests.p2?.teamPreview) {
       session.phase = "チーム選出";
       const cpuOrder = "team " + opponentTeam.map((_, index) => index + 1).join("");
-      if (options.deferPlayerTeamPreview === true && session.requests.p1?.teamPreview) {
-        // Showdown advances team preview only after both sides choose. The CPU preselects
-        // its order when the player submits theirs in submitAction().
-        session.cpuTeamChoice = cpuOrder;
-      } else {
-        session.battle.choose("p1", "team " + playerTeam.map((_, index) => index + 1).join(""));
-        session.battle.choose("p2", cpuOrder);
-        session.battle.sendUpdates();
-        await waitFor(session, () =>
-          !!session.requests.p1 && !!session.requests.p2 &&
-          !session.requests.p1.teamPreview && !session.requests.p2.teamPreview
-        );
-      }
+      session.battle.choose("p1", "team " + playerTeam.map((_, index) => index + 1).join(""));
+      session.battle.choose("p2", cpuOrder);
+      session.battle.sendUpdates();
+      await waitFor(session, () =>
+        !!session.requests.p1 && !!session.requests.p2 &&
+        !session.requests.p1.teamPreview && !session.requests.p2.teamPreview
+      );
     }
 
     session.phase = "対戦準備完了";
@@ -441,6 +435,35 @@ function chooseCpuAction(request) {
   return "move " + (picked.index + 1) + suffix;
 }
 
+function makePreviewRequest(team, side) {
+  return {
+    teamPreview:true,
+    maxTeamSize:6,
+    side:{
+      id:side,
+      pokemon:team.map(mon=>({
+        ident:side + ": " + (mon.name || mon.species),
+        details:(mon.species || mon.name) + ", L" + (mon.level || 50),
+        condition:"100/100",
+        active:false
+      }))
+    }
+  };
+}
+
+function validatePreviewOrder(action, team) {
+  const requestedOrder=action?.teamOrder;
+  if(!Array.isArray(requestedOrder)||requestedOrder.length!==team.length) {
+    throw new Error("6体の並び順をすべて決めてください。");
+  }
+  const order=requestedOrder.map(Number);
+  if(order.some(index=>!Number.isInteger(index)||index<0||index>=team.length)||
+     new Set(order).size!==team.length) {
+    throw new Error("チームの並び順が不正です。");
+  }
+  return order;
+}
+
 async function startBattle(payload) {
   if (currentSession) {
     destroySession(currentSession);
@@ -454,12 +477,31 @@ async function startBattle(payload) {
     if (!Array.isArray(opponentTeam) || opponentTeam.length !== 6) {
       throw new Error("CPUチームを生成できませんでした。");
     }
-    phase = "Showdown対戦開始";
-    const session = await createSession(playerTeam, opponentTeam, payload.playerName || "プレイヤー", "CPU", {
-      deferPlayerTeamPreview:true
-    });
-    currentSession = session;
-    return snapshot(session);
+    phase = "対戦前のチーム選出";
+    const playerName=payload.playerName || "プレイヤー";
+    const previewSession = {
+      id:"preview-" + Date.now(),
+      token:"",
+      phase:"チーム選出",
+      preview:true,
+      playerTeam,
+      opponentTeam,
+      playerName,
+      opponentName:"CPU",
+      requests:{
+        p1:makePreviewRequest(playerTeam,"p1"),
+        p2:makePreviewRequest(opponentTeam,"p2")
+      },
+      requestVersion:{p1:0,p2:0},
+      logs:[],
+      waiters:new Set(),
+      done:false,
+      winner:null,
+      error:null,
+      lastActive:Date.now()
+    };
+    currentSession=previewSession;
+    return snapshot(previewSession);
   } catch (error) {
     throw new Error(phase + "で失敗: " + (error?.message || String(error)));
   }
@@ -470,6 +512,17 @@ async function submitAction(payload) {
   const session = currentSession;
   if (!session) throw new Error("対戦セッションがありません。");
   if (session.done) return snapshot(session, payload.cursor);
+  if(session.preview===true) {
+    const order=validatePreviewOrder(payload.action||{},session.playerTeam);
+    const orderedTeam=order.map(index=>session.playerTeam[index]);
+    const opponentTeam=session.opponentTeam;
+    const playerName=session.playerName;
+    destroySession(session);
+    currentSession=null;
+    const battle=await createSession(orderedTeam,opponentTeam,playerName,"CPU");
+    currentSession=battle;
+    return snapshot(battle,payload.cursor);
+  }
   const p1Version = session.requestVersion.p1;
   const playerChoice = buildChoice(session, payload.action || {});
   const cpuChoice = session.requests.p2?.teamPreview
