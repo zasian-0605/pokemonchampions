@@ -97,39 +97,8 @@
     }
   }
 
-  const previousRenderPage = W.renderPage;
-  if (typeof previousRenderPage === "function" && !previousRenderPage._v38SpriteStable) {
-    const stableRenderPage = function() {
-      const currentState = appState();
-      const main = doc.getElementById?.("main") || doc.querySelector?.("#main");
-      const canMorphBattle = currentState?.page === "battle" &&
-        !!currentState.battle && !!main?.querySelector?.(".battlefield") &&
-        typeof W.renderBattlePage === "function";
-
-      // Use the original renderer for navigation and the first battle render.
-      // Once the battlefield exists, reconcile its DOM in place so sprite <img> nodes
-      // never leave the document just because HP, logs, or move buttons changed.
-      if (!canMorphBattle) return previousRenderPage.apply(this, arguments);
-
-      const keepScroll = currentState.battle.turnBusy ? W.scrollY : null;
-      const template = doc.createElement("template");
-      template.innerHTML = W.renderBattlePage();
-      morphChildren(main, template.content);
-
-      if (typeof W.updateTop === "function") W.updateTop();
-      if (typeof W.bindPageEvents === "function") W.bindPageEvents();
-      if (keepScroll !== null && keepScroll !== undefined && typeof W.scrollTo === "function") {
-        const root = doc.documentElement;
-        const oldBehavior = root?.style?.scrollBehavior;
-        if (root?.style) root.style.scrollBehavior = "auto";
-        W.scrollTo(0, keepScroll);
-        if (root?.style) root.style.scrollBehavior = oldBehavior || "";
-      }
-    };
-    stableRenderPage._v38SpriteStable = true;
-    stableRenderPage._v38Original = previousRenderPage;
-    W.renderPage = stableRenderPage;
-  }
+  // Battle render interception was removed after it caused sprite images to disappear.
+  // Keep the original renderer; only apply the battle-size CSS and shop artwork patch.
 
   function normalizedId(value) {
     return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -201,7 +170,7 @@
     morphNode,
     audit: () => ({
       version: 38,
-      spriteStableBattleRender: !!W.renderPage?._v38SpriteStable,
+      spriteStableBattleRender: false,
       megaEnergyArtwork: !!W.renderShop?._v38EnergyArtwork,
       battlePageHook: typeof W.renderBattlePage === "function",
       spriteKeyPreservation: true
