@@ -331,33 +331,87 @@ function assignGen9Client(socket, room, player) {
 function makeGen9Player(socket,name,team,side) {
   return {id:crypto.randomUUID(),side,name:safeString(name || "トレーナー",18) || "トレーナー",team,socket,token:null};
 }
+function makeGen9PreviewRequest(team, side) {
+  return {
+    teamPreview:true,
+    maxTeamSize:6,
+    side:{
+      id:side,
+      pokemon:team.map(mon=>({
+        ident:side+": "+(mon.name||mon.species),
+        details:(mon.species||mon.name)+", L"+(mon.level||50),
+        condition:"100/100",
+        active:false
+      }))
+    }
+  };
+}
+function makeGen9PreviewSnapshot(ownTeam, opponentTeam, side, roomCode) {
+  const otherSide=side==="p1"?"p2":"p1";
+  return {
+    battleId:"preview-"+roomCode,
+    token:"",
+    format:FORMAT_ID,
+    turn:0,
+    request:makeGen9PreviewRequest(ownTeam,side),
+    opponentRequest:makeGen9PreviewRequest(opponentTeam,otherSide),
+    opponentReady:true,
+    logs:[],
+    logCursor:0,
+    done:false,
+    winner:null,
+    error:null
+  };
+}
+function validateGen9TeamOrder(order, team) {
+  if(!Array.isArray(order)||order.length!==team.length)throw new Error("チーム全員の並び順を決めてください。");
+  const normalized=order.map(Number);
+  if(normalized.some(index=>!Number.isInteger(index)||index<0||index>=team.length)||
+     new Set(normalized).size!==team.length)throw new Error("チームの並び順が不正です。");
+  return normalized;
+}
 async function startGen9RoomBattle(room, p1, player) {
-  room.phase = "starting";
+  room.phase="preview";
+  room.previewStartedAt=Date.now();
+  room.actions=new Map();
+  room.resolving=false;
+  room.turn=0;
+  const matchType=room.matchType==="random"?"random":"private";
+  const p1Snapshot=makeGen9PreviewSnapshot(p1.team,player.team,"p1",room.code);
+  const p2Snapshot=makeGen9PreviewSnapshot(player.team,p1.team,"p2",room.code);
+  send(p1.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p1",snapshot:p1Snapshot,playerName:p1.name,opponent:player.name,matchType});
+  send(player.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p2",snapshot:p2Snapshot,playerName:player.name,opponent:p1.name,matchType});
+}
+async function resolveGen9TeamPreview(room) {
+  const p1=room.players.get("p1"),p2=room.players.get("p2");
+  if(!p1||!p2)throw new Error("対戦相手がルームから退出しました。");
+  const p1Order=room.actions.get("p1")?.teamOrder;
+  const p2Order=room.actions.get("p2")?.teamOrder;
+  p1.team=p1Order.map(index=>p1.team[index]);
+  p2.team=p2Order.map(index=>p2.team[index]);
   try {
     const p1Snapshot=await gen9Service.createBattle({
-      playerTeam:p1.team,opponentTeam:player.team,
-      player1Name:p1.name,player2Name:player.name,kind:"online"
+      playerTeam:p1.team,opponentTeam:p2.team,
+      player1Name:p1.name,player2Name:p2.name,kind:"online"
     });
     const engineSession=gen9Service.get(p1Snapshot.battleId,p1Snapshot.token,"p1");
     const p2Snapshot=gen9Service.snapshot(engineSession,"p2",0);
     p1.token=p1Snapshot.token;
-    player.token=p2Snapshot.token;
+    p2.token=p2Snapshot.token;
     room.battleId=p1Snapshot.battleId;
-    room.tokens={p1:p1.token,p2:player.token};
+    room.tokens={p1:p1.token,p2:p2.token};
     room.cursors={p1:p1Snapshot.logCursor||0,p2:p2Snapshot.logCursor||0};
     room.actions=new Map();
     room.phase="active";
     room.turn=1;
-    const matchType=room.matchType==="random"?"random":"private";
-    send(p1.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p1",snapshot:p1Snapshot,playerName:p1.name,opponent:player.name,matchType});
-    send(player.socket,{type:"gen9-match-ready",roomCode:room.code,side:"p2",snapshot:p2Snapshot,playerName:player.name,opponent:p1.name,matchType});
+    for(const [side,snapshot] of [["p1",p1Snapshot],["p2",p2Snapshot]]) {
+      const recipient=room.players.get(side);
+      if(recipient)send(recipient.socket,{type:"gen9-battle-update",snapshot});
+    }
   } catch(error) {
-    const message=error.message || "Showdown対戦を開始できませんでした。";
-    console.error("[gen9-match] battle startup failed", room.code, room.matchType || "private", error?.stack || error);
-    for(const p of room.players.values())send(p.socket,{type:"gen9-room-error",message});
-    gen9Rooms.delete(room.code);
-    for(const p of room.players.values())try{p.socket.close(1011,"battle startup failed");}catch(_){}
-    if(room.battleId)gen9Service.destroy(room.battleId);
+    room.phase="preview";
+    room.actions.clear();
+    throw error;
   }
 }
 async function joinGen9Room(socket,payload) {
@@ -416,21 +470,34 @@ async function handleGen9Action(socket,payload) {
   const client=clients.get(socket)||{};
   const room=client.gen9RoomCode?gen9Rooms.get(client.gen9RoomCode):null;
   const player=room?.players.get(client.playerId===room.players.get("p1")?.id?"p1":"p2");
-  if(!room||!player||room.phase!=="active") {
+  if(!room||!player||(room.phase!=="active"&&room.phase!=="preview")) {
     send(socket,{type:"error",message:"第9世代の対戦ルームに参加していません。"});
     return;
   }
   if(room.resolving) {
-    send(socket,{type:"error",message:"相手の行動を処理中です。"});
+    send(socket,{type:"error",message:"相手の操作を処理中です。"});
     return;
   }
   if(room.actions.has(player.side)) {
-    send(socket,{type:"error",message:"このターンの行動は送信済みです。"});
+    send(socket,{type:"error",message:"この操作は送信済みです。"});
     return;
   }
   try {
-    gen9Service.validateAction(room.battleId,player.token,player.side,payload.action||{});
-    room.actions.set(player.side,payload.action||{});
+    const action=payload.action||{};
+    if(room.phase==="preview") {
+      const order=validateGen9TeamOrder(action.teamOrder,player.team);
+      room.actions.set(player.side,{teamOrder:order});
+      send(socket,{type:"gen9-action-accepted",turn:0});
+      room.lastActive=Date.now();
+      if(room.actions.size<2)return;
+      room.resolving=true;
+      room.phase="starting";
+      await resolveGen9TeamPreview(room);
+      room.lastActive=Date.now();
+      return;
+    }
+    gen9Service.validateAction(room.battleId,player.token,player.side,action);
+    room.actions.set(player.side,action);
     send(socket,{type:"gen9-action-accepted",turn:room.turn});
     if(room.actions.size<2)return;
     room.resolving=true;
@@ -450,6 +517,7 @@ async function handleGen9Action(socket,payload) {
     room.lastActive=Date.now();
   } catch(error) {
     room.actions.delete(player.side);
+    if(room.phase==="starting")room.phase="preview";
     send(socket,{type:"error",message:error.message || "行動を処理できませんでした。"});
   } finally {
     room.resolving=false;
