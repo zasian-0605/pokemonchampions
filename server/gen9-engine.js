@@ -307,7 +307,7 @@ class Gen9BattleService {
         !!session.requests.p1 && !!session.requests.p2, REQUEST_TIMEOUT_MS
       );
 
-      if (session.requests.p1?.teamPreview || session.requests.p2?.teamPreview) {
+      if ((session.requests.p1?.teamPreview || session.requests.p2?.teamPreview) && options.kind !== "online") {
         const order = team1.map((_, index) => index + 1).join("");
         await stream.write(">p1 team " + order);
         await stream.write(">p2 team " + team2.map((_, index) => index + 1).join(""));
@@ -545,6 +545,7 @@ class Gen9BattleService {
       format: FORMAT_ID,
       turn: Number(session.requests[side]?.rqid || 0),
       request: session.requests[side],
+      opponentRequest: session.requests[side === "p1" ? "p2" : "p1"],
       logs: session.logs.slice(cursor),
       logCursor: session.logs.length,
       done: session.done,
@@ -556,7 +557,21 @@ class Gen9BattleService {
   buildChoice(session, side, action) {
     const request = session.requests[side];
     if (!request || request.wait) throw new Error("現在は行動を選べません。");
-    if (request.teamPreview) throw new Error("チーム選出が終わっていません。");
+    if (request.teamPreview) {
+      const pokemon = request.side?.pokemon || [];
+      const requestedOrder = action?.teamOrder;
+      if (!Array.isArray(requestedOrder) || requestedOrder.length !== pokemon.length) {
+        throw new Error("6体の並び順をすべて決めてください。");
+      }
+      const order = requestedOrder.map(Number);
+      if (order.some(index => !Number.isInteger(index) || index < 0 || index >= pokemon.length) ||
+          new Set(order).size !== pokemon.length) {
+        throw new Error("チームの並び順が不正です。");
+      }
+      const minimum = Math.min(pokemon.length, Math.max(1, Number(request.maxTeamSize) || pokemon.length));
+      if (order.length < minimum) throw new Error("選出するポケモンが足りません。");
+      return "team " + order.map(index => index + 1).join("");
+    }
 
     if (request.forceSwitch?.some(Boolean)) {
       const index = Number(action?.switchTo);
@@ -663,6 +678,7 @@ class Gen9BattleService {
     };
     const p1Version = session.requestVersion.p1;
     const p2Version = session.requestVersion.p2;
+    const wasTeamPreview = !!session.requests.p1?.teamPreview || !!session.requests.p2?.teamPreview;
     const p1Choice = this.buildChoice(session, "p1", actions.p1);
     const p2Choice = this.buildChoice(session, "p2", actions.p2);
     await session.stream.write(">p1 " + p1Choice);
@@ -672,7 +688,8 @@ class Gen9BattleService {
         session.requestVersion.p1 > p1Version &&
         session.requestVersion.p2 > p2Version &&
         !!session.requests.p1 && !!session.requests.p2 &&
-        !session.requests.p1.wait && !session.requests.p2.wait
+        !session.requests.p1.wait && !session.requests.p2.wait &&
+        (!wasTeamPreview || (!session.requests.p1.teamPreview && !session.requests.p2.teamPreview))
       ),
       REQUEST_TIMEOUT_MS
     );
